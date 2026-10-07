@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: stg_openfigi_mappings
+    columns:
+      - name: figi
+        tests:
+          - unique
+          - not_null
