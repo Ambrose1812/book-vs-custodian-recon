@@ -2,6 +2,9 @@
 
 Idempotent per ingest_date: each partition is deleted and re-inserted
 inside one transaction, so reruns never duplicate rows.
+
+Also guarded by a Postgres advisory lock, so two copies of this script
+can never run against the same table at the same time.
 """
 import os
 from datetime import date, datetime, timezone
@@ -17,6 +20,7 @@ load_dotenv(ROOT / ".env")
 
 LANDING = ROOT / "data" / "landing" / "openfigi"
 SCHEMA, TABLE = "raw", "openfigi_mappings"
+LOCK_KEY = 918273645  # any fixed integer, unique to this pipeline
 
 
 def get_engine():
@@ -54,8 +58,25 @@ def load_partition(engine, partition_dir: Path) -> int:
     return len(df)
 
 
-if __name__ == "__main__":
-    engine = get_engine()
+def run_all_partitions(engine):
     for partition in sorted(LANDING.glob("ingest_date=*")):
         n = load_partition(engine, partition)
         print(f"{partition.name}: loaded {n} rows")
+
+
+if __name__ == "__main__":
+    engine = get_engine()
+
+    with engine.connect() as lock_conn:
+        got_lock = lock_conn.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY}
+        ).scalar()
+
+        if not got_lock:
+            print("Another load is already running. Exiting.")
+            raise SystemExit(1)
+
+        try:
+            run_all_partitions(engine)
+        finally:
+            lock_conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
