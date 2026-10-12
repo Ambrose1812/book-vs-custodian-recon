@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dim_security_master
+    columns:
+      - name: security_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_positions
+    columns:
+      - name: security_id
+        tests:
+          - not_null
+      - name: shares_held
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true

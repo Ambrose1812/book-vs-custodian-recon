@@ -6,7 +6,12 @@ so weekends and market holidays are correctly skipped.
 
 A running position is tracked per security while generating, so a SELL
 can never exceed shares actually held at that point — never happens in
-real markets, so the simulation doesn't allow it either.
+real markets, so the simulation shouldn't allow it either.
+
+Every transaction's trade_date is decided up front, before generation,
+so generation order and chronological order are guaranteed to match —
+otherwise the no-oversell check is only valid in generation order, not
+in the trade_date order positions actually reads.
 """
 import random
 from datetime import date, datetime, timezone
@@ -17,7 +22,7 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 from sqlalchemy import text
 
-from load_to_postgres import get_engine  # reuse the same connection logic
+from load_to_postgres import get_engine
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "landing" / "transactions"
@@ -46,17 +51,28 @@ def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:
     rows = []
     holdings = {s["security_id"]: 0 for s in securities}
 
-    # Seed every security with one BUY first, so SELLs always have something
-    # to sell against, then fill the rest of the count with random activity.
-    pending = [dict(security_id=s["security_id"], ticker=s["ticker"], seed=True) for s in securities]
-    pending += [dict(security_id=random.choice(securities)["security_id"],
-                      ticker=None, seed=False) for _ in range(n - len(securities))]
+    # Decide every transaction's security and trade_date FIRST, fixed and final,
+    # then sort by that same trade_date before generating sides/quantities.
+    # This guarantees generation order == chronological order, so the
+    # no-oversell check is enforced in the same order positions will read.
+    planned = [
+        dict(security_id=s["security_id"], trade_date=random_business_day(START_DATE, END_DATE), seed=True)
+        for s in securities
+    ]
+    planned += [
+        dict(
+            security_id=random.choice(securities)["security_id"],
+            trade_date=random_business_day(START_DATE, END_DATE),
+            seed=False,
+        )
+        for _ in range(n - len(securities))
+    ]
 
-    dated = sorted(pending, key=lambda _: random_business_day(START_DATE, END_DATE))
+    dated = sorted(planned, key=lambda p: p["trade_date"])
 
     for i, p in enumerate(dated):
         sec_id = p["security_id"]
-        trade_date = random_business_day(START_DATE, END_DATE)
+        trade_date = p["trade_date"]
         settlement_date = trade_date + US_BDAY * 1
         price = round(random.uniform(50, 450), 2)
 
