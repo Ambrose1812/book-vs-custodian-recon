@@ -1,10 +1,10 @@
-"""Load OpenFIGI landing Parquet into Postgres raw.openfigi_mappings.
+"""Load landing-zone Parquet into Postgres, for every source this project has.
 
 Idempotent per ingest_date: each partition is deleted and re-inserted
 inside one transaction, so reruns never duplicate rows.
 
 Also guarded by a Postgres advisory lock, so two copies of this script
-can never run against the same table at the same time.
+can never run against the same database at the same time.
 """
 import os
 from datetime import date, datetime, timezone
@@ -18,12 +18,24 @@ from sqlalchemy.engine import URL
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-LANDING = ROOT / "data" / "landing" / "openfigi"
-SCHEMA, TABLE = "raw", "openfigi_mappings"
+SCHEMA = "raw"
 LOCK_KEY = 918273645  # any fixed integer, unique to this pipeline
+
+LANDING = ROOT / "data" / "landing" / "openfigi"
+TABLE = "openfigi_mappings"
 
 TRANSACTIONS_LANDING = ROOT / "data" / "landing" / "transactions"
 TRANSACTIONS_TABLE = "transactions"
+
+TIINGO_LANDING = ROOT / "data" / "landing" / "tiingo"
+PRICES_TABLE = "prices"
+
+# One entry per data source: (label for logging, landing folder, raw table name)
+SOURCES = [
+    ("openfigi", LANDING, TABLE),
+    ("transactions", TRANSACTIONS_LANDING, TRANSACTIONS_TABLE),
+    ("tiingo", TIINGO_LANDING, PRICES_TABLE),
+]
 
 
 def get_engine():
@@ -38,7 +50,7 @@ def get_engine():
     return create_engine(url)
 
 
-def load_partition(engine, partition_dir: Path) -> int:
+def load_table_partition(engine, table: str, partition_dir: Path) -> int:
     ingest_date = date.fromisoformat(partition_dir.name.split("=")[1])
     files = sorted(partition_dir.glob("*.parquet"))
     if not files:
@@ -52,46 +64,20 @@ def load_partition(engine, partition_dir: Path) -> int:
     df["_loaded_at"] = datetime.now(timezone.utc)
 
     with engine.begin() as conn:  # one transaction: all or nothing
-        if inspect(conn).has_table(TABLE, schema=SCHEMA):
+        if inspect(conn).has_table(table, schema=SCHEMA):
             conn.execute(
-                text(f"DELETE FROM {SCHEMA}.{TABLE} WHERE ingest_date = :d"),
+                text(f"DELETE FROM {SCHEMA}.{table} WHERE ingest_date = :d"),
                 {"d": ingest_date},
             )
-        df.to_sql(TABLE, conn, schema=SCHEMA, if_exists="append", index=False)
-    return len(df)
-
-
-def load_transactions_partition(engine, partition_dir: Path) -> int:
-    ingest_date = date.fromisoformat(partition_dir.name.split("=")[1])
-    files = sorted(partition_dir.glob("*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No parquet files in {partition_dir}")
-
-    df = pd.concat(
-        [pd.read_parquet(f).assign(_source_file=f.name) for f in files],
-        ignore_index=True,
-    )
-    df["ingest_date"] = ingest_date
-    df["_loaded_at"] = datetime.now(timezone.utc)
-
-    with engine.begin() as conn:
-        if inspect(conn).has_table(TRANSACTIONS_TABLE, schema=SCHEMA):
-            conn.execute(
-                text(f"DELETE FROM {SCHEMA}.{TRANSACTIONS_TABLE} WHERE ingest_date = :d"),
-                {"d": ingest_date},
-            )
-        df.to_sql(TRANSACTIONS_TABLE, conn, schema=SCHEMA, if_exists="append", index=False)
+        df.to_sql(table, conn, schema=SCHEMA, if_exists="append", index=False)
     return len(df)
 
 
 def run_all_partitions(engine):
-    for partition in sorted(LANDING.glob("ingest_date=*")):
-        n = load_partition(engine, partition)
-        print(f"openfigi {partition.name}: loaded {n} rows")
-
-    for partition in sorted(TRANSACTIONS_LANDING.glob("ingest_date=*")):
-        n = load_transactions_partition(engine, partition)
-        print(f"transactions {partition.name}: loaded {n} rows")
+    for label, landing_dir, table in SOURCES:
+        for partition in sorted(landing_dir.glob("ingest_date=*")):
+            n = load_table_partition(engine, table, partition)
+            print(f"{label} {partition.name}: loaded {n} rows")
 
 
 if __name__ == "__main__":
