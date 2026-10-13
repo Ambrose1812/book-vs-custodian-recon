@@ -24,3 +24,27 @@ unit_tests:
         - {transaction_id: 1, shares_held: '100.000000', market_value: 40000}
         - {transaction_id: 2, shares_held: '250.000000', market_value: 50000}
         - {transaction_id: 3, shares_held: '470.000000', market_value: 47470}
+
+  - name: test_int_prices_split_indexed_compounds_splits
+    description: >
+      Verifies the running log-sum product: two 2-for-1 splits compound to 4,
+      the index carries forward on non-split days, and each ticker's index
+      restarts independently (partition by ticker).
+    model: int_prices_split_indexed
+    given:
+      - input: ref('stg_prices')
+        rows:
+          - {ticker: 'AAPL', price_date: '2026-04-16', close_price: 400, split_factor: 1}
+          - {ticker: 'AAPL', price_date: '2026-06-01', close_price: 200, split_factor: 2}
+          - {ticker: 'AAPL', price_date: '2026-06-02', close_price: 201, split_factor: 1}
+          - {ticker: 'AAPL', price_date: '2026-08-03', close_price: 101, split_factor: 2}
+          - {ticker: 'MSFT', price_date: '2026-04-16', close_price: 300, split_factor: 1}
+          - {ticker: 'MSFT', price_date: '2026-06-01', close_price: 301, split_factor: 1}
+    expect:
+      rows:
+        - {ticker: 'AAPL', price_date: '2026-04-16', cum_split_factor: '1.00000000'}
+        - {ticker: 'AAPL', price_date: '2026-06-01', cum_split_factor: '2.00000000'}
+        - {ticker: 'AAPL', price_date: '2026-06-02', cum_split_factor: '2.00000000'}
+        - {ticker: 'AAPL', price_date: '2026-08-03', cum_split_factor: '4.00000000'}
+        - {ticker: 'MSFT', price_date: '2026-04-16', cum_split_factor: '1.00000000'}
+        - {ticker: 'MSFT', price_date: '2026-06-01', cum_split_factor: '1.00000000'}
