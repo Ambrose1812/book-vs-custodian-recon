@@ -1,0 +1,16 @@
+# dbt connection profile used INSIDE the Airflow containers only
+# (selected by DBT_PROFILES_DIR in docker-compose.yml). No secrets here:
+# everything comes from environment variables. Your own PC keeps using
+# ~/.dbt/profiles.yml, so running dbt by hand is unchanged.
+recon_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: public
+      threads: 4

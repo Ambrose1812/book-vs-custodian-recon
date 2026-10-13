@@ -43,8 +43,8 @@ def get_engine():
         "postgresql+psycopg2",
         username=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
-        host="localhost",
-        port=5433,
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", "5433")),
         database=os.environ["POSTGRES_DB"],
     )
     return create_engine(url)

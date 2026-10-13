@@ -1,0 +1,10 @@
+# Direct dependencies of the pipeline scripts and dbt, pinned to the versions
+# used on the development PC. Transitive dependencies are left for pip to resolve.
+pandas==3.0.6
+pyarrow==25.0.1
+SQLAlchemy==2.1.4
+psycopg2-binary==2.9.13
+python-dotenv==1.2.4
+requests==2.34.2
+dbt-core==1.12.5
+dbt-postgres==1.11.0
