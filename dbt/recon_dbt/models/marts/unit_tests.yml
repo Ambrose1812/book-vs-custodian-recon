@@ -1,0 +1,26 @@
+unit_tests:
+  - name: test_fct_positions_two_splits
+    description: >
+      Two 2-for-1 splits (June, August) with a buy in between and a sell after.
+      Verifies splits compound, apply only to earlier shares, and that prices
+      stay unadjusted.
+    model: fct_positions
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - {transaction_id: 1, security_id: 'FIGI1', trade_date: '2026-04-16', side: 'BUY',  quantity: 100}
+          - {transaction_id: 2, security_id: 'FIGI1', trade_date: '2026-07-01', side: 'BUY',  quantity: 50}
+          - {transaction_id: 3, security_id: 'FIGI1', trade_date: '2026-09-01', side: 'SELL', quantity: 30}
+      - input: ref('dim_security_master')
+        rows:
+          - {security_id: 'FIGI1', ticker: 'AAPL'}
+      - input: ref('int_prices_split_indexed')
+        rows:
+          - {ticker: 'AAPL', price_date: '2026-04-16', close_price: 400, cum_split_factor: 1}
+          - {ticker: 'AAPL', price_date: '2026-07-01', close_price: 200, cum_split_factor: 2}
+          - {ticker: 'AAPL', price_date: '2026-09-01', close_price: 101, cum_split_factor: 4}
+    expect:
+      rows:
+        - {transaction_id: 1, shares_held: '100.000000', market_value: 40000}
+        - {transaction_id: 2, shares_held: '250.000000', market_value: 50000}
+        - {transaction_id: 3, shares_held: '470.000000', market_value: 47470}
