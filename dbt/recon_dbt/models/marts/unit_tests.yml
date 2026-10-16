@@ -48,3 +48,34 @@ unit_tests:
         - {ticker: 'AAPL', price_date: '2026-08-03', cum_split_factor: '4.00000000'}
         - {ticker: 'MSFT', price_date: '2026-04-16', cum_split_factor: '1.00000000'}
         - {ticker: 'MSFT', price_date: '2026-06-01', cum_split_factor: '1.00000000'}
+
+  - name: test_fct_recon_positions_classification
+    description: >
+      One security per recon status on a single trading day. A matches the
+      trade-date book; B differs from the trade-date book but equals the
+      settled book (trades not yet settled, so a timing difference, not a
+      break); C is held by the book but absent from the custodian; D is held
+      by the custodian but absent from the book; E disagrees after settlement.
+    model: fct_recon_positions
+    given:
+      - input: ref('int_prices_split_indexed')
+        rows:
+          - {ticker: 'X', price_date: '2026-06-01'}
+      - input: ref('int_book_daily_holdings')
+        rows:
+          - {as_of_date: '2026-06-01', security_id: 'A', quantity_trade_basis: 100, quantity_settled_basis: 100}
+          - {as_of_date: '2026-06-01', security_id: 'B', quantity_trade_basis: 100, quantity_settled_basis: 0}
+          - {as_of_date: '2026-06-01', security_id: 'C', quantity_trade_basis: 50,  quantity_settled_basis: 50}
+          - {as_of_date: '2026-06-01', security_id: 'E', quantity_trade_basis: 100, quantity_settled_basis: 100}
+      - input: ref('stg_custodian_holdings')
+        rows:
+          - {as_of_date: '2026-06-01', security_id: 'A', quantity: 100}
+          - {as_of_date: '2026-06-01', security_id: 'D', quantity: 30}
+          - {as_of_date: '2026-06-01', security_id: 'E', quantity: 1000}
+    expect:
+      rows:
+        - {security_id: 'A', recon_status: 'matched',              is_break: false}
+        - {security_id: 'B', recon_status: 'timing_difference',    is_break: false}
+        - {security_id: 'C', recon_status: 'missing_on_custodian', is_break: true}
+        - {security_id: 'D', recon_status: 'missing_in_book',      is_break: true}
+        - {security_id: 'E', recon_status: 'quantity_break',       is_break: true}

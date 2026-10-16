@@ -7,3 +7,5 @@ sources:
       - name: openfigi_mappings
       - name: transactions
       - name: prices
+      - name: custodian_holdings
+      - name: planted_breaks

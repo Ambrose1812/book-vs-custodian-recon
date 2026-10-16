@@ -18,3 +18,14 @@ models:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
+
+  - name: fct_recon_positions
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [as_of_date, security_id]
+    columns:
+      - name: recon_status
+        tests:
+          - not_null
+          - accepted_values:
+              values: [matched, timing_difference, missing_on_custodian, missing_in_book, quantity_break]

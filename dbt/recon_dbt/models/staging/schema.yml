@@ -26,3 +26,12 @@ models:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: false
+
+  - name: stg_custodian_holdings
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [as_of_date, security_id]
+    columns:
+      - name: quantity
+        tests:
+          - not_null

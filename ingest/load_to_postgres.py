@@ -30,11 +30,20 @@ TRANSACTIONS_TABLE = "transactions"
 TIINGO_LANDING = ROOT / "data" / "landing" / "tiingo"
 PRICES_TABLE = "prices"
 
+CUSTODIAN_LANDING = ROOT / "data" / "landing" / "custodian"
+CUSTODIAN_TABLE = "custodian_holdings"
+
+# Simulation answer key for the planted custodian breaks (used only by a dbt test)
+TRUTH_LANDING = ROOT / "data" / "landing" / "truth"
+TRUTH_TABLE = "planted_breaks"
+
 # One entry per data source: (label for logging, landing folder, raw table name)
 SOURCES = [
     ("openfigi", LANDING, TABLE),
     ("transactions", TRANSACTIONS_LANDING, TRANSACTIONS_TABLE),
     ("tiingo", TIINGO_LANDING, PRICES_TABLE),
+    ("custodian", CUSTODIAN_LANDING, CUSTODIAN_TABLE),
+    ("truth", TRUTH_LANDING, TRUTH_TABLE),
 ]
 
 
