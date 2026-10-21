@@ -39,5 +39,11 @@ Newest first.
 - **Rejected:** back-adjusted shares and prices, which suit return calculations. Mixing one adjusted side with one raw side would be a silent error.
 - **Costs:** the query is harder, and a trade on the ex-date is deliberately not adjusted.
 
+## The pipeline creates its own `raw` schema
+- **Question:** who creates the `raw` schema in a new database?
+- **Chose:** the loader runs `CREATE SCHEMA IF NOT EXISTS raw` inside the load transaction.
+- **Rejected:** creating it by hand once, as I did on the first run. A clean clone failed at `load_reference_data` with `schema "raw" does not exist`, which is how I found the gap.
+- **Costs:** one extra statement per load, and the loader now needs permission to create schemas.
+
 ## Known risks not yet handled
 - If a later custodian feed omits a row an earlier ingest contained, staging keeps the old row, because the latest ingest wins per record. Not a problem with a fixed seed and unchanged inputs; worth a test.

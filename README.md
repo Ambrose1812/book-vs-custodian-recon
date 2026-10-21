@@ -43,7 +43,7 @@ OpenFIGI + Tiingo + simulated transactions
 
 ## Run it
 1. Copy `.env.example` to `.env` and fill in `TIINGO_API_KEY`, the Postgres settings, and optionally `OPENFIGI_API_KEY` (the OpenFIGI ingest also works without a key, at a lower rate limit).
-2. `docker compose up -d --build` (Postgres on host port 5433, Airflow UI at http://localhost:8080).
+2. If another copy of this project is running, run `docker compose down` in that folder first. The Postgres container has a fixed name and the ports (5433, 8080) can only be used once. Then run `docker compose up -d --build` (Postgres on host port 5433, Airflow UI at http://localhost:8080, login `airflow` / `airflow`). The Postgres user, password and database name in `.env` can be any values you choose; a fresh database is created with them, including the `raw` schema.
 3. Open Airflow, unpause `recon_pipeline`, and trigger it. The DAG runs: OpenFIGI ingest, reference load, security master, then transactions seed and Tiingo ingest in parallel, raw load, a partial dbt build of prices, the custodian simulator, a second raw load (custodian feed and answer key), the full `dbt run`, `dbt test`. The custodian simulator reads built prices, which is why it sits after a partial dbt build.
 
 ## Data sources
