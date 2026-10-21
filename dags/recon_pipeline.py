@@ -1,4 +1,4 @@
-"""Phase 1 pipeline: ingest -> land as Parquet -> load to Postgres -> dbt build -> dbt test.
+"""Recon pipeline: ingest -> land as Parquet -> load to Postgres -> dbt -> custodian feed -> recon -> test.
 
 Every task shells out to the same scripts and dbt commands you run by hand, inside an
 isolated virtualenv, so a DAG run and a manual run behave identically.
@@ -7,6 +7,9 @@ Order matters because of real data dependencies:
   * Tiingo prices and simulated transactions need marts.dim_security_master, which
     needs OpenFIGI loaded and the security-master models built first.
   * Everything downstream of the loads needs raw tables to exist.
+  * The simulated custodian feed is built FROM the prices and security master, so it
+    can only run after a first, partial dbt build. Its raw tables then have to exist
+    before the full dbt run, because the recon models read them.
 
 Safe to re-run: the loader replaces whole ingest_date partitions inside one
 transaction, guards itself with a Postgres advisory lock, and the staging models keep
@@ -51,13 +54,13 @@ SEED_ONCE = (
 
 with DAG(
     dag_id="recon_pipeline",
-    description="Book-vs-custodian reconciliation: Phase 1 batch pipeline",
+    description="Book-vs-custodian reconciliation: batch pipeline through recon and scoring",
     start_date=datetime(2026, 10, 1),
     schedule=None,
     catchup=False,
     max_active_runs=1,
     default_args={"retries": 1, "retry_delay": timedelta(minutes=2)},
-    tags=["recon", "phase1"],
+    tags=["recon", "phase2"],
 ) as dag:
     ingest_openfigi = python_script("ingest_openfigi", "openfigi_ingest.py")
     load_reference = python_script("load_reference_data", "load_to_postgres.py")
@@ -73,9 +76,20 @@ with DAG(
     ingest_tiingo = python_script("ingest_tiingo", "tiingo_ingest.py", retries=0)
 
     load_all = python_script("load_all_raw", "load_to_postgres.py")
+
+    # Partial build: only what the custodian simulator reads (prices with split factors).
+    dbt_build_prices = dbt_command(
+        "dbt_build_prices", "run --select +int_prices_split_indexed"
+    )
+    simulate_custodian = python_script("simulate_custodian", "simulate_custodian.py")
+    # Same loader as load_all: it is idempotent per ingest_date, so reloading the
+    # earlier sources is harmless, and it picks up the new custodian and answer-key files.
+    load_custodian = python_script("load_custodian_and_answer_key", "load_to_postgres.py")
+
     dbt_run = dbt_command("dbt_run", "run")
     dbt_test = dbt_command("dbt_test", "test")
 
     ingest_openfigi >> load_reference >> build_security_master
     build_security_master >> [seed_transactions, ingest_tiingo] >> load_all
-    load_all >> dbt_run >> dbt_test
+    load_all >> dbt_build_prices >> simulate_custodian >> load_custodian
+    load_custodian >> dbt_run >> dbt_test
