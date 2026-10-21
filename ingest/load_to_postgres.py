@@ -73,6 +73,8 @@ def load_table_partition(engine, table: str, partition_dir: Path) -> int:
     df["_loaded_at"] = datetime.now(timezone.utc)
 
     with engine.begin() as conn:  # one transaction: all or nothing
+        # A fresh database has no raw schema yet; create it so a clean clone can load.
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
         if inspect(conn).has_table(table, schema=SCHEMA):
             conn.execute(
                 text(f"DELETE FROM {SCHEMA}.{table} WHERE ingest_date = :d"),
