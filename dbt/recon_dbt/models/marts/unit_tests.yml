@@ -79,3 +79,33 @@ unit_tests:
         - {security_id: 'C', recon_status: 'missing_on_custodian', is_break: true}
         - {security_id: 'D', recon_status: 'missing_in_book',      is_break: true}
         - {security_id: 'E', recon_status: 'quantity_break',       is_break: true}
+
+  - name: test_fct_break_episodes_gaps_and_weekend
+    description: >
+      Security A breaks Tue-Wed, clears Thu, then breaks Fri and the following
+      Mon (no row for the weekend), so it has two episodes and the second spans
+      the weekend as one. Security C breaks only on the first day and has
+      cleared. Security B is clean and only supplies the calendar. The latest
+      date is Mon 2026-06-08, so only A's second episode is open.
+    model: fct_break_episodes
+    given:
+      - input: ref('fct_recon_positions')
+        rows:
+          - {as_of_date: '2026-06-01', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-02', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-03', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-04', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-05', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-08', security_id: 'B', recon_status: 'matched',              is_break: false}
+          - {as_of_date: '2026-06-01', security_id: 'C', recon_status: 'quantity_break',        is_break: true}
+          - {as_of_date: '2026-06-02', security_id: 'C', recon_status: 'matched',               is_break: false}
+          - {as_of_date: '2026-06-02', security_id: 'A', recon_status: 'quantity_break',        is_break: true}
+          - {as_of_date: '2026-06-03', security_id: 'A', recon_status: 'quantity_break',        is_break: true}
+          - {as_of_date: '2026-06-04', security_id: 'A', recon_status: 'matched',               is_break: false}
+          - {as_of_date: '2026-06-05', security_id: 'A', recon_status: 'missing_on_custodian',  is_break: true}
+          - {as_of_date: '2026-06-08', security_id: 'A', recon_status: 'quantity_break',        is_break: true}
+    expect:
+      rows:
+        - {security_id: 'A', episode_start: '2026-06-02', episode_end: '2026-06-03', days_in_break: 2, first_status: 'quantity_break',       last_status: 'quantity_break', is_open: false, age_bucket: '1-2 days'}
+        - {security_id: 'A', episode_start: '2026-06-05', episode_end: '2026-06-08', days_in_break: 2, first_status: 'missing_on_custodian', last_status: 'quantity_break', is_open: true,  age_bucket: '1-2 days'}
+        - {security_id: 'C', episode_start: '2026-06-01', episode_end: '2026-06-01', days_in_break: 1, first_status: 'quantity_break',       last_status: 'quantity_break', is_open: false, age_bucket: '1-2 days'}

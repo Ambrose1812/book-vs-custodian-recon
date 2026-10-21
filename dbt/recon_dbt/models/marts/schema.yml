@@ -29,3 +29,31 @@ models:
           - not_null
           - accepted_values:
               values: [matched, timing_difference, missing_on_custodian, missing_in_book, quantity_break]
+
+  - name: fct_break_episodes
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [security_id, episode_start]
+    columns:
+      - name: days_in_break
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+      - name: age_bucket
+        tests:
+          - accepted_values:
+              values: ['1-2 days', '3-5 days', '6-10 days', '11-30 days', '31+ days']
+
+  - name: fct_recon_daily_kpis
+    columns:
+      - name: as_of_date
+        tests:
+          - unique
+          - not_null
+      - name: match_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true

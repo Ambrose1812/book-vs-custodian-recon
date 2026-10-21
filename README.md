@@ -9,10 +9,10 @@ investigation. This project simulates that daily process.
 
 ## Status
 - **Phase 1 (complete):** batch pipeline from raw sources to split-adjusted positions, orchestrated by Airflow.
-- **Phase 2 (in progress):** simulated custodian feed with planted breaks, daily book holdings, and a break-detecting recon scored against an answer key (done). Break aging and KPIs (next).
+- **Phase 2 (complete):** simulated custodian feed with planted breaks, daily book holdings, a break-detecting recon scored against an answer key, and break aging with daily KPIs.
 
 ## Result
-Latest scoring run: 14 planted errors (13 trade errors and one skipped stock split) across 20 securities, 6 left clean as controls. The recon flags all 14 on the day each one starts and flags none of the controls. This is checked by a dbt test, so a regression fails the build.
+Latest scoring run: 14 planted errors (13 trade errors and one skipped stock split) across 20 securities, 6 left clean as controls. The recon flags all 14 on the day each one starts and flags none of the controls. This is checked by a dbt test, so a regression fails the build. Breaks are grouped into episodes with an age: all 14 are still open, 12 older than 30 days and 2 between 11 and 30.
 
 ## Architecture
 ```
@@ -29,7 +29,7 @@ OpenFIGI + Tiingo + simulated transactions
 | --- | --- | --- |
 | staging | `stg_openfigi_mappings`, `stg_prices`, `stg_transactions`, `stg_custodian_holdings` | Dedupe to the latest ingest per record |
 | intermediate | `int_prices_split_indexed`, `int_book_daily_holdings` | Cumulative split factor per ticker and date; our book's daily holdings on trade-date and settled bases |
-| marts | `dim_security_master`, `fct_positions`, `fct_recon_positions` | Security dimension; split-adjusted position and market value per trade; book vs custodian, one row per security per trading day, classified |
+| marts | `dim_security_master`, `fct_positions`, `fct_recon_positions`, `fct_break_episodes`, `fct_recon_daily_kpis`, `fct_open_breaks_summary` | Security dimension; split-adjusted position and market value per trade; book vs custodian per security per trading day, classified; one row per unbroken run of break days with its age; daily match rate and break counts; open breaks by type and age bucket |
 
 ## Key design decisions
 - **Raw is append-only; staging picks the latest ingest.** Reruns never overwrite history, and a corrected source row replaces the old one downstream.
@@ -38,7 +38,8 @@ OpenFIGI + Tiingo + simulated transactions
 - **Recon is a full outer join.** An inner join would drop securities held on only one side, and those are often the real problems. Statuses: `matched`, `timing_difference` (custodian agrees with our settled book, so the gap is trades that have not settled yet, not an error), `missing_on_custodian`, `missing_in_book`, `quantity_break`. Differences within a small tolerance count as rounding.
 - **The custodian feed is independent of our book.** It is built from raw transactions and prices, not from `fct_positions`, so any disagreement has a real cause. It reports settled holdings and omits zero positions, like a real statement.
 - **Scored against an answer key.** The simulator plants known errors (missing, 10x, and duplicated trades, plus a skipped stock split) and keeps control securities clean. A dbt test fails if the recon misses a planted break, flags a control, or first flags a break on the wrong day. The answer key is a simulation fixture and never feeds the recon models.
-- **Tests.** 17 dbt data tests plus 3 unit tests (mocked inputs, expected outputs for the split math and the recon classification). A snapshot-and-`EXCEPT` check confirmed the rewritten `fct_positions` matched the previous output.
+- **Breaks are grouped into episodes.** One problem shows up as many flagged days, so a run of consecutive trading days in break is one episode with a start, an age and an open or closed flag. A clean day ends an episode; a return starts a new one with its age reset.
+- **Tests.** 25 dbt data tests plus 4 unit tests (mocked inputs, expected outputs for the split math, the recon classification and the episode logic). A snapshot-and-`EXCEPT` check confirmed the rewritten `fct_positions` matched the previous output.
 
 ## Run it
 1. Copy `.env.example` to `.env` and fill in `TIINGO_API_KEY`, the Postgres settings, and optionally `OPENFIGI_API_KEY` (the OpenFIGI ingest also works without a key, at a lower rate limit).
@@ -56,6 +57,7 @@ OpenFIGI + Tiingo + simulated transactions
 - The custodian feed and its errors are simulated, so the detection result above is measured against the errors the simulator plants, not real ones.
 - Only four kinds of break are planted. Real custodians also produce price, currency, and corporate-action timing differences. The skipped-split case rests on one real split (APH, 2-for-1 on 2026-09-03), because it is the only split in the date range.
 - Simulated settlement treats Good Friday as a business day; the custodian is filtered to trading days, so it causes no false breaks.
+- Every planted break stays open, so aging shows old open breaks and never a resolved one. Age is counted through the last date in the data, not today's date.
 - The DAG is manually triggered, with no schedule yet.
 - Only splits are handled; dividends and other corporate actions are not.
 - Idempotent reruns are tested with unchanged prices; a changed price replacing an old one is not yet covered by a test.

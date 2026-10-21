@@ -3,11 +3,17 @@
 One entry per decision: the question, what I chose, what I rejected, and what it costs.
 Newest first.
 
+## What counts as a break episode, an open break, and a match
+- **Question:** how do I turn a daily list of flagged positions into something with an age?
+- **Chose:** an episode is an unbroken run of break days for one security, counted in trading days, so a break from Friday into Monday is one episode. A gap of one trading day ends it, and a return starts a new episode with a fresh age. An episode is open if it is still flagged on the latest date. Match rate counts matched and timing_difference as good standing.
+- **Rejected:** counting calendar days (a weekend would look like a gap), and one row per security (it would merge a break that cleared and came back into a single item).
+- **Costs:** every planted error in the simulation stays unresolved, so all episodes are open and old. The aging buckets will not show a mix until the simulator can also resolve some breaks. A break that changes type while open keeps one episode, and the model records its first and last type.
+
 ## Scoring the recon on detection date, not just detection
 - **Question:** how do I know the recon works when the custodian feed is simulated?
 - **Chose:** plant known errors and score the recon against an answer key. The test fails on a missed break, a false alarm on a clean control, or a first flag on the wrong day.
 - **Rejected:** only checking that each planted security is flagged on any day. That passes a recon that flags the right security for the wrong reason, or weeks late.
-- **Costs:** the answer key is a simulation fixture and cannot exist for real data, so it proves the logic, not real-world coverage. Break type is not asserted, because one planted cause can legitimately show up under more than one status.
+- **Costs:** the answer key is a simulation fixture and cannot exist for real data, so it proves the logic, not real-world coverage. Break type is checked only as a warning (`assert_planted_breaks_are_quantity_breaks`), because one planted cause could in principle show up under more than one status. With the current seed all 14 come out as quantity breaks, so the warning is silent. Making it a hard failure would turn a seed change into a broken build.
 
 ## Custodian feed built from prices, not from the book
 - **Question:** what should the simulated custodian be built from?
