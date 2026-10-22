@@ -39,7 +39,7 @@ OpenFIGI + Tiingo + simulated transactions
 - **The custodian feed is independent of our book.** It is built from raw transactions and prices, not from `fct_positions`, so any disagreement has a real cause. It reports settled holdings and omits zero positions, like a real statement.
 - **Scored against an answer key.** The simulator plants known errors (missing, 10x, and duplicated trades, plus a skipped stock split) and keeps control securities clean. A dbt test fails if the recon misses a planted break, flags a control, or first flags a break on the wrong day. The answer key is a simulation fixture and never feeds the recon models.
 - **Breaks are grouped into episodes.** One problem shows up as many flagged days, so a run of consecutive trading days in break is one episode with a start, an age and an open or closed flag. A clean day ends an episode; a return starts a new one with its age reset.
-- **Tests.** 25 dbt data tests plus 4 unit tests (mocked inputs, expected outputs for the split math, the recon classification and the episode logic). A snapshot-and-`EXCEPT` check confirmed the rewritten `fct_positions` matched the previous output.
+- **Tests.** 26 dbt data tests (one is warn-level) plus 4 unit tests (mocked inputs, expected outputs for the split math, the recon classification and the episode logic). A snapshot-and-`EXCEPT` check confirmed the rewritten `fct_positions` matched the previous output.
 
 ## Run it
 1. Copy `.env.example` to `.env` and fill in `TIINGO_API_KEY`, the Postgres settings, and optionally `OPENFIGI_API_KEY` (the OpenFIGI ingest also works without a key, at a lower rate limit).
