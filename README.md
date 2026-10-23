@@ -2,6 +2,8 @@
 
 Does our book of record match the custodian, and where are the breaks?
 
+A batch pipeline that rebuilds a portfolio's daily positions from trades and reconciles them against a custodian holdings feed. Built with Python, Postgres, dbt, Airflow, and Docker. Identifiers (OpenFIGI) and prices and splits (Tiingo) are real; the transactions and the custodian feed are simulated, and the recon is scored against known planted errors. The reasoning behind each design choice, including what I rejected and what it costs, is in [docs/decisions.md](docs/decisions.md).
+
 ## Why this matters
 A fund's internal records (the book of record) and its custodian bank's records
 should agree on what is owned. Differences are called breaks and need
@@ -13,6 +15,17 @@ investigation. This project simulates that daily process.
 
 ## Result
 Latest scoring run: 14 planted errors (13 trade errors and one skipped stock split) across 20 securities, 6 left clean as controls. The recon flags all 14 on the day each one starts and flags none of the controls. This is checked by a dbt test, so a regression fails the build. Breaks are grouped into episodes with an age: all 14 are still open, 12 older than 30 days and 2 between 11 and 30.
+
+## Where to look
+| To see | Open |
+| --- | --- |
+| The recon logic (full outer join, classification) | `dbt/recon_dbt/models/marts/fct_recon_positions.sql` |
+| Split-adjusted positions on an as-of basis | `dbt/recon_dbt/models/marts/fct_positions.sql`, `dbt/recon_dbt/models/intermediate/int_prices_split_indexed.sql` |
+| Break episodes and aging | `dbt/recon_dbt/models/marts/fct_break_episodes.sql` |
+| The answer-key test | `dbt/recon_dbt/tests/assert_recon_finds_planted_breaks.sql` |
+| The idempotent loader and advisory lock | `ingest/load_to_postgres.py` |
+| The orchestration | `dags/recon_pipeline.py` |
+| Why each choice was made | `docs/decisions.md` |
 
 ## Architecture
 ```
@@ -32,6 +45,8 @@ OpenFIGI + Tiingo + simulated transactions
 | marts | `dim_security_master`, `fct_positions`, `fct_recon_positions`, `fct_break_episodes`, `fct_recon_daily_kpis`, `fct_open_breaks_summary` | Security dimension; split-adjusted position and market value per trade; book vs custodian per security per trading day, classified; one row per unbroken run of break days with its age; daily match rate and break counts; open breaks by type and age bucket |
 
 ## Key design decisions
+Short versions here; the full entries (question, choice, rejected alternative, cost) are in [docs/decisions.md](docs/decisions.md).
+
 - **Raw is append-only; staging picks the latest ingest.** Reruns never overwrite history, and a corrected source row replaces the old one downstream.
 - **Idempotent loads.** The loader deletes and inserts one `ingest_date` partition per table in a single transaction, and holds a Postgres advisory lock so two loads cannot overlap.
 - **Splits use an as-of basis (custodian style).** Prices stay raw; shares are rebuilt as `F_D x sum(q_i / F_i)` using the cumulative split factor at each date. A trade on the split's ex-date is not adjusted.
