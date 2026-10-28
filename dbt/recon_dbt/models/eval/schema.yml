@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: eval_cause_scoring
+    description: >
+      Simulation only. Scores break-cause methods against the planted-break
+      answer key. Real data has no answer key, so this is not production data.
+    columns:
+      - name: security_id
+        tests:
+          - unique
+          - not_null

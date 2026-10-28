@@ -39,3 +39,6 @@ models:
     marts:
       +schema: marts
       +materialized: table
+    eval:
+      +schema: eval
+      +materialized: table

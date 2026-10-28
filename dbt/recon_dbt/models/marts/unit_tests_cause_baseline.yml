@@ -1,0 +1,54 @@
+unit_tests:
+  - name: test_cause_baseline_hard_cases
+    description: >
+      Harder cases for the rules baseline, built by hand so the real data stays
+      untouched. Four securities, each with a known gap on its first break day.
+      S1: a BUY 100 and a SELL 100 settle the same day and the custodian is
+      missing the SELL. The gap of +100 fits both a duplicate BUY and a missing
+      SELL, so the baseline has to say unknown.
+      S2: two BUY 50s settle the same day and the custodian is missing one. It is
+      the same cause either way, but the baseline can't tell which trade, so unknown.
+      S3: the clean case, one candidate trade, should come out as missing_trade.
+      S4: a missing trade and an unapplied split on the ex-date at the same time.
+      No single signature fits, so unknown.
+    model: fct_break_cause_baseline
+    given:
+      - input: ref('int_prices_split_indexed')
+        rows:
+          - {ticker: 'X', price_date: '2026-06-01', split_factor: 1, cum_split_factor: 1}
+          - {ticker: 'X', price_date: '2026-06-02', split_factor: 1, cum_split_factor: 1}
+          - {ticker: 'Y', price_date: '2026-06-01', split_factor: 1, cum_split_factor: 1}
+          - {ticker: 'Y', price_date: '2026-06-02', split_factor: 2, cum_split_factor: 2}
+      - input: ref('dim_security_master')
+        rows:
+          - {security_id: 'S1', ticker: 'X'}
+          - {security_id: 'S2', ticker: 'X'}
+          - {security_id: 'S3', ticker: 'X'}
+          - {security_id: 'S4', ticker: 'Y'}
+      - input: ref('fct_break_episodes')
+        rows:
+          - {security_id: 'S1', episode_start: '2026-06-01'}
+          - {security_id: 'S2', episode_start: '2026-06-01'}
+          - {security_id: 'S3', episode_start: '2026-06-01'}
+          - {security_id: 'S4', episode_start: '2026-06-02'}
+      - input: ref('fct_recon_positions')
+        rows:
+          - {security_id: 'S1', as_of_date: '2026-06-01', recon_status: 'quantity_break', custodian_quantity: 100, book_quantity_settled_basis: 0,   difference_vs_settled_basis: 100}
+          - {security_id: 'S2', as_of_date: '2026-06-01', recon_status: 'quantity_break', custodian_quantity: 50,  book_quantity_settled_basis: 100, difference_vs_settled_basis: -50}
+          - {security_id: 'S3', as_of_date: '2026-06-01', recon_status: 'quantity_break', custodian_quantity: 0,   book_quantity_settled_basis: 100, difference_vs_settled_basis: -100}
+          - {security_id: 'S4', as_of_date: '2026-06-02', recon_status: 'quantity_break', custodian_quantity: 100, book_quantity_settled_basis: 300, difference_vs_settled_basis: -200}
+      - input: ref('stg_transactions')
+        rows:
+          - {transaction_id: 1,  security_id: 'S1', trade_date: '2026-05-29', settlement_date: '2026-06-01', side: 'BUY',  quantity: 100}
+          - {transaction_id: 2,  security_id: 'S1', trade_date: '2026-05-29', settlement_date: '2026-06-01', side: 'SELL', quantity: 100}
+          - {transaction_id: 3,  security_id: 'S2', trade_date: '2026-05-29', settlement_date: '2026-06-01', side: 'BUY',  quantity: 50}
+          - {transaction_id: 4,  security_id: 'S2', trade_date: '2026-05-29', settlement_date: '2026-06-01', side: 'BUY',  quantity: 50}
+          - {transaction_id: 5,  security_id: 'S3', trade_date: '2026-05-29', settlement_date: '2026-06-01', side: 'BUY',  quantity: 100}
+          - {transaction_id: 10, security_id: 'S4', trade_date: '2026-05-28', settlement_date: '2026-05-29', side: 'BUY',  quantity: 100}
+          - {transaction_id: 11, security_id: 'S4', trade_date: '2026-06-01', settlement_date: '2026-06-02', side: 'BUY',  quantity: 50}
+    expect:
+      rows:
+        - {security_id: 'S1', cause_predicted: 'unknown',       cause_method: 'ambiguous',    n_trade_matches: 2}
+        - {security_id: 'S2', cause_predicted: 'unknown',       cause_method: 'ambiguous',    n_trade_matches: 2}
+        - {security_id: 'S3', cause_predicted: 'missing_trade', cause_method: 'trade_ratio',  n_trade_matches: 1}
+        - {security_id: 'S4', cause_predicted: 'unknown',       cause_method: 'no_signature', n_trade_matches: 0}
