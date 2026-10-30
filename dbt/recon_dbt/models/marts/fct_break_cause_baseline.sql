@@ -1,5 +1,5 @@
 -- Rules-only baseline for break causes. No model and no LLM, just the
--- signatures in docs/break_taxonomy.md. Anything I add later gets scored
+-- signatures in docs/break_taxonomy.md. Anything added later gets scored
 -- against this.
 --
 -- For each break episode, looking at its first break day (D):

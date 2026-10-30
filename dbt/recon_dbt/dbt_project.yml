@@ -42,3 +42,13 @@ models:
     eval:
       +schema: eval
       +materialized: table
+
+# Requires-action thresholds. These mirror classify/action_policy.py, keep them in sync.
+vars:
+  gap_bps_review: 0.5
+  gap_bps_escalate: 5.0
+  nav_materiality_bps: 50.0
+  relative_gap_escalate: 0.10
+  age_review_trading_days: 3
+  age_escalate_trading_days: 6
+  recurrence_window_trading_days: 20

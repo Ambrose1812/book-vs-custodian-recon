@@ -68,3 +68,36 @@ models:
           - not_null
           - accepted_values:
               values: [missing_trade, duplicate_trade, wrong_quantity, split_not_applied, unknown]
+
+  - name: fct_break_requires_action
+    description: One row per open break episode, with a requires-action level (1 to 3) and the reasons.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [security_id, episode_start]
+    columns:
+      - name: action_level
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3]
+                quote: false
+      - name: action_reason
+        tests:
+          - not_null
+
+  - name: fct_break_action_history
+    description: One row per security, break episode, and trading day, with the requires-action level as of that day.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [security_id, episode_start, as_of_date]
+    columns:
+      - name: action_level
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3]
+                quote: false

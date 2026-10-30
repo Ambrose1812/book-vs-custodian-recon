@@ -1,0 +1,118 @@
+unit_tests:
+  - name: test_action_history_levels
+    description: >
+      One security per trigger, so each level rule is checked on its own, plus
+      two securities that show a break getting more urgent day by day. A filler
+      security P keeps the portfolio near 9 to 10 million at $100, so 1 share of
+      gap is about 0.1 bp, 5 shares is about 0.5 bp and 50 shares is about 5 bp.
+      A: tiny gap, young, cause named, so level 1.
+      B: gap of about 1 bp, over the review size, so level 2.
+      C: gap of about 10 bp, over the escalate size, so level 3.
+      D: tiny gap but the cause is unknown, so level 2.
+      E: tiny gap but it is a split, so level 3.
+      F: tiny gap, open 6 days. Level 1 on days 1 and 2, level 2 on days 3 to 5,
+      level 3 on day 6.
+      G: tiny gap, open 3 days. Level 1, 1, then 2 on day 3.
+      H: tiny gap but 20% of a 20 share position, so level 3.
+      I: an earlier episode (2 days, level 1) and a new one that starts 4 trading
+      days after it ended, so the new one is level 3 from recurrence.
+    model: fct_break_action_history
+    given:
+      - input: ref('int_prices_split_indexed')
+        rows:
+          - {ticker: 'T', price_date: '2026-06-01', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-02', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-03', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-04', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-05', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-08', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-09', close_price: 100}
+          - {ticker: 'T', price_date: '2026-06-10', close_price: 100}
+      - input: ref('dim_security_master')
+        rows:
+          - {security_id: 'A', ticker: 'T'}
+          - {security_id: 'B', ticker: 'T'}
+          - {security_id: 'C', ticker: 'T'}
+          - {security_id: 'D', ticker: 'T'}
+          - {security_id: 'E', ticker: 'T'}
+          - {security_id: 'F', ticker: 'T'}
+          - {security_id: 'G', ticker: 'T'}
+          - {security_id: 'H', ticker: 'T'}
+          - {security_id: 'I', ticker: 'T'}
+          - {security_id: 'P', ticker: 'T'}
+      - input: ref('fct_recon_positions')
+        rows:
+          - {security_id: 'P', as_of_date: '2026-06-01', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-02', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-03', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-04', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-05', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-08', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-09', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'P', as_of_date: '2026-06-10', book_quantity_settled_basis: 90000, difference_vs_settled_basis: 0}
+          - {security_id: 'A', as_of_date: '2026-06-10', book_quantity_settled_basis: 4000, difference_vs_settled_basis: -3}
+          - {security_id: 'B', as_of_date: '2026-06-10', book_quantity_settled_basis: 3000, difference_vs_settled_basis: 10}
+          - {security_id: 'C', as_of_date: '2026-06-10', book_quantity_settled_basis: 2000, difference_vs_settled_basis: -100}
+          - {security_id: 'D', as_of_date: '2026-06-10', book_quantity_settled_basis: 500, difference_vs_settled_basis: 2}
+          - {security_id: 'E', as_of_date: '2026-06-10', book_quantity_settled_basis: 200, difference_vs_settled_basis: -2}
+          - {security_id: 'H', as_of_date: '2026-06-10', book_quantity_settled_basis: 20, difference_vs_settled_basis: -4}
+          - {security_id: 'F', as_of_date: '2026-06-03', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'F', as_of_date: '2026-06-04', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'F', as_of_date: '2026-06-05', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'F', as_of_date: '2026-06-08', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'F', as_of_date: '2026-06-09', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'F', as_of_date: '2026-06-10', book_quantity_settled_basis: 100, difference_vs_settled_basis: -3}
+          - {security_id: 'G', as_of_date: '2026-06-08', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'G', as_of_date: '2026-06-09', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'G', as_of_date: '2026-06-10', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'I', as_of_date: '2026-06-01', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'I', as_of_date: '2026-06-02', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'I', as_of_date: '2026-06-08', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'I', as_of_date: '2026-06-09', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+          - {security_id: 'I', as_of_date: '2026-06-10', book_quantity_settled_basis: 100, difference_vs_settled_basis: 3}
+      - input: ref('fct_break_episodes')
+        rows:
+          - {security_id: 'A', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'B', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'C', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'D', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'E', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'H', episode_start: '2026-06-10', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'F', episode_start: '2026-06-03', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'G', episode_start: '2026-06-08', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+          - {security_id: 'I', episode_start: '2026-06-01', episode_end: '2026-06-02', last_status: 'quantity_break', is_open: false}
+          - {security_id: 'I', episode_start: '2026-06-08', episode_end: '2026-06-10', last_status: 'quantity_break', is_open: true}
+      - input: ref('fct_break_cause_baseline')
+        rows:
+          - {security_id: 'A', first_break_date: '2026-06-10', cause_predicted: 'missing_trade'}
+          - {security_id: 'B', first_break_date: '2026-06-10', cause_predicted: 'missing_trade'}
+          - {security_id: 'C', first_break_date: '2026-06-10', cause_predicted: 'missing_trade'}
+          - {security_id: 'D', first_break_date: '2026-06-10', cause_predicted: 'unknown'}
+          - {security_id: 'E', first_break_date: '2026-06-10', cause_predicted: 'split_not_applied'}
+          - {security_id: 'F', first_break_date: '2026-06-03', cause_predicted: 'missing_trade'}
+          - {security_id: 'G', first_break_date: '2026-06-08', cause_predicted: 'missing_trade'}
+          - {security_id: 'H', first_break_date: '2026-06-10', cause_predicted: 'missing_trade'}
+          - {security_id: 'I', first_break_date: '2026-06-01', cause_predicted: 'missing_trade'}
+          - {security_id: 'I', first_break_date: '2026-06-08', cause_predicted: 'missing_trade'}
+    expect:
+      rows:
+        - {security_id: 'A', as_of_date: '2026-06-10', action_level: 1}
+        - {security_id: 'B', as_of_date: '2026-06-10', action_level: 2}
+        - {security_id: 'C', as_of_date: '2026-06-10', action_level: 3}
+        - {security_id: 'D', as_of_date: '2026-06-10', action_level: 2}
+        - {security_id: 'E', as_of_date: '2026-06-10', action_level: 3}
+        - {security_id: 'H', as_of_date: '2026-06-10', action_level: 3}
+        - {security_id: 'F', as_of_date: '2026-06-03', action_level: 1}
+        - {security_id: 'F', as_of_date: '2026-06-04', action_level: 1}
+        - {security_id: 'F', as_of_date: '2026-06-05', action_level: 2}
+        - {security_id: 'F', as_of_date: '2026-06-08', action_level: 2}
+        - {security_id: 'F', as_of_date: '2026-06-09', action_level: 2}
+        - {security_id: 'F', as_of_date: '2026-06-10', action_level: 3}
+        - {security_id: 'G', as_of_date: '2026-06-08', action_level: 1}
+        - {security_id: 'G', as_of_date: '2026-06-09', action_level: 1}
+        - {security_id: 'G', as_of_date: '2026-06-10', action_level: 2}
+        - {security_id: 'I', as_of_date: '2026-06-01', action_level: 1}
+        - {security_id: 'I', as_of_date: '2026-06-02', action_level: 1}
+        - {security_id: 'I', as_of_date: '2026-06-08', action_level: 3}
+        - {security_id: 'I', as_of_date: '2026-06-09', action_level: 3}
+        - {security_id: 'I', as_of_date: '2026-06-10', action_level: 3}
