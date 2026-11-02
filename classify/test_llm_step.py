@@ -69,10 +69,24 @@ class LlmStepTests(unittest.TestCase):
         self.assertEqual(p.calls, 1)           # the model was only asked once
         self.assertEqual(len(self.records()), 1)  # and only one record was written
 
+    def test_failed_call_is_retried_not_reused(self):
+        first = classify_break(CASE, MockProvider(""), self.audit)
+        self.assertEqual(first.validation_error, "empty reply")
+        good = MockProvider('{"cause": "missing_trade", "confidence": 0.7, "reason": "x"}')
+        second = classify_break(CASE, good, self.audit)
+        self.assertFalse(second.from_cache)
+        self.assertEqual(second.final_cause, "missing_trade")
+
+    def test_provider_meta_is_recorded(self):
+        p = MockProvider('{"cause": "unknown", "confidence": 0.1, "reason": "x"}')
+        p.last_meta = {"stop_reason": "end_turn", "output_tokens": 12}
+        classify_break(CASE, p, self.audit)
+        self.assertEqual(self.records()[0]["provider_meta"]["stop_reason"], "end_turn")
+
     def test_audit_record_has_what_an_auditor_needs(self):
         classify_break(CASE, MockProvider(), self.audit)
         rec = self.records()[0]
-        for key in ("prompt_text", "raw_response", "model", "prompt_version", "final_cause", "input_hash"):
+        for key in ("prompt_text", "raw_response", "provider_meta", "model", "prompt_version", "final_cause", "input_hash"):
             self.assertIn(key, rec)
         self.assertEqual(rec["prompt_version"], PROMPT_VERSION)
 

@@ -64,7 +64,7 @@ class MockProvider:
     model = "mock-1"
 
     def __init__(self, reply: str | None = None):
-        self.reply = reply or '{"cause": "unknown", "confidence": 0.0, "reason": "mock provider"}'
+        self.reply = reply if reply is not None else '{"cause": "unknown", "confidence": 0.0, "reason": "mock provider"}'
         self.calls = 0
 
     def complete(self, prompt: str) -> str:
@@ -86,7 +86,8 @@ class JsonlAuditLog:
         with self.path.open() as f:
             for line in f:
                 rec = json.loads(line)
-                if rec["input_hash"] == input_hash:
+                # Only successful decisions are reused. A failed call should be retried.
+                if rec["input_hash"] == input_hash and rec["validation_error"] is None:
                     return rec
         return None
 
@@ -112,6 +113,8 @@ def build_prompt(case: BreakCase) -> str:
 
 def parse_reply(raw: str):
     """Returns (cause, confidence, reason, error). Anything off becomes unknown."""
+    if not raw or not raw.strip():
+        return "unknown", 0.0, "", "empty reply"
     try:
         start, end = raw.index("{"), raw.rindex("}") + 1  # tolerates code fences around the JSON
         data = json.loads(raw[start:end])
@@ -158,6 +161,7 @@ def classify_break(case: BreakCase, provider, audit: JsonlAuditLog) -> Result:
         "prompt_version": PROMPT_VERSION,
         "prompt_text": prompt,
         "raw_response": raw,
+        "provider_meta": getattr(provider, "last_meta", None),  # stop reason and token counts
         "final_cause": result.final_cause,
         "confidence": result.confidence,
         "reason": result.reason,

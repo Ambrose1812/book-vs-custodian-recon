@@ -14,6 +14,7 @@ create table if not exists audit.llm_decisions (
     prompt_version    text not null,
     prompt_text       text not null,        -- exactly what the model saw
     raw_response      text,                 -- exactly what it said (null if the call failed)
+    provider_meta     jsonb,                -- why the call ended and the token counts
     final_cause       text not null,        -- after validation; bad answers become unknown
     confidence        numeric,
     reason            text,
