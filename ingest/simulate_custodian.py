@@ -25,28 +25,21 @@ plant reproducible for a given transaction file.
 """
 import random
 from datetime import datetime, timezone
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pandas.tseries.holiday import USFederalHolidayCalendar
-from pandas.tseries.offsets import CustomBusinessDay
 from sqlalchemy import text
 
 from load_to_postgres import get_engine
+from pipeline_common import LANDING_ROOT, US_BDAY, write_partition
 
-ROOT = Path(__file__).resolve().parent.parent
-TX_LANDING = ROOT / "data" / "landing" / "transactions"
-OUT = ROOT / "data" / "landing" / "custodian"
-TRUTH = ROOT / "data" / "landing" / "truth"
+TX_LANDING = LANDING_ROOT / "transactions"
 
 SEED = 42
 N_MISSING = 6
 N_WRONG_QTY = 4
 N_DUPLICATE = 3
 N_SPLIT_SKIPPED = 2
-
-US_BDAY = CustomBusinessDay(calendar=USFederalHolidayCalendar())
 
 
 def ns(values) -> np.ndarray:
@@ -93,8 +86,9 @@ def daily_holdings(trades: pd.DataFrame, factor_of, dates: pd.DatetimeIndex) -> 
     for sec, g in trades.groupby("security_id"):
         ticker = g["ticker"].iloc[0]
         base = g["signed_qty"].to_numpy() / factor_of(ticker, g["trade_date"])
-        order = np.argsort(ns(g["settlement_date"]))
-        settle = ns(g["settlement_date"])[order]
+        settle_ns = ns(g["settlement_date"])
+        order = np.argsort(settle_ns)
+        settle = settle_ns[order]
         cum = np.cumsum(base[order])
         idx = np.searchsorted(settle, day_ns, side="right")
         settled_base = np.where(idx > 0, cum[np.maximum(idx - 1, 0)], 0.0)
@@ -196,19 +190,15 @@ if __name__ == "__main__":
     dates = pd.date_range(trades["trade_date"].min(), prices["price_date"].max(), freq=US_BDAY)
     holdings = daily_holdings(cust_trades, factor_of, dates)
 
-    ingest_date = datetime.now(timezone.utc).date()
-    part = OUT / f"ingest_date={ingest_date}"
-    part.mkdir(parents=True, exist_ok=True)
-    holdings.to_parquet(part / "part-0001.parquet", index=False)
+    ingest_date = datetime.now(timezone.utc).date()  # one date for both files
+    holdings_path = write_partition(holdings, "custodian", ingest_date)
 
-    truth_part = TRUTH / f"ingest_date={ingest_date}"
-    truth_part.mkdir(parents=True, exist_ok=True)
     truth.insert(0, "break_id", range(1, len(truth) + 1))
     truth["transaction_id"] = truth["transaction_id"].astype("Int64")
-    truth.to_parquet(truth_part / "part-0001.parquet", index=False)
+    write_partition(truth, "truth", ingest_date)
 
     clean = trades["security_id"].nunique() - len(truth)
-    print(f"Wrote {len(holdings)} holdings rows to {part / 'part-0001.parquet'}")
+    print(f"Wrote {len(holdings)} holdings rows to {holdings_path}")
     print(f"Planted {len(truth)} breaks ({truth['break_type'].value_counts().to_dict()}); "
           f"{clean} securities left clean as controls")
     if len(skipped) < N_SPLIT_SKIPPED:

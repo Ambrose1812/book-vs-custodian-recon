@@ -5,7 +5,6 @@ Four calls to the cheapest model, so a fraction of a cent. Decisions are saved i
 data/audit/dry_run.jsonl, and a rerun reuses them (free). Delete that file to
 ask the model again.
 """
-import os
 
 from classify.llm_step import BreakCase, JsonlAuditLog, classify_break
 from classify.providers import ROOT, AnthropicProvider

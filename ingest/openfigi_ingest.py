@@ -4,18 +4,18 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 import requests
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
+from pipeline_common import ROOT, write_partition
+
 UNIVERSE = ROOT / "ingest" / "universe.csv"
-LANDING = ROOT / "data" / "landing" / "openfigi"
 URL = "https://api.openfigi.com/v3/mapping"
-BATCH_SIZE = 10  # no-key limit from memory; check OpenFIGI docs
+# 10 jobs per request without an API key, 100 with one. This comes from OpenFIGI
+# client-library docs; I could not open openfigi.com's own documentation to confirm.
+BATCH_SIZE = 10
 FIELDS = ["figi", "name", "ticker", "exchCode", "compositeFIGI",
           "shareClassFIGI", "securityType", "securityType2", "marketSector"]
 
@@ -64,16 +64,6 @@ def flatten(batch, results, batch_id, ingested_at):
     return rows
 
 
-def write_parquet(rows, ingest_date):
-    out_dir = LANDING / f"ingest_date={ingest_date}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    final = out_dir / "part-0001.parquet"
-    tmp = out_dir / "part-0001.parquet.tmp"
-    pq.write_table(pa.Table.from_pylist(rows), tmp)
-    os.replace(tmp, final)  # swap into place in one step
-    return final
-
-
 def main():
     universe = read_universe()
     batch_id = str(uuid.uuid4())
@@ -87,9 +77,10 @@ def main():
         results = post_batch(jobs)
         assert len(results) == len(jobs), "response size mismatch"
         all_rows += flatten(batch, results, batch_id, ingested_at)
-        time.sleep(3)  # stay under the per-minute limit
+        if i + BATCH_SIZE < len(universe):
+            time.sleep(3)  # stay under the per-minute limit
 
-    path = write_parquet(all_rows, ingested_at[:10])
+    path = write_partition(pa.Table.from_pylist(all_rows), "openfigi", ingested_at[:10])
     unmapped = sum(r["match_status"] == "no_match" for r in all_rows)
     print(f"Wrote {len(all_rows)} rows to {path} ({unmapped} unmapped)")
 

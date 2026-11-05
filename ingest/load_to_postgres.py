@@ -15,35 +15,22 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import URL
 
-ROOT = Path(__file__).resolve().parent.parent
+from pipeline_common import LANDING_ROOT, ROOT
+
 load_dotenv(ROOT / ".env")
 
 SCHEMA = "raw"
 LOCK_KEY = 918273645  # any fixed integer, unique to this pipeline
 
-LANDING = ROOT / "data" / "landing" / "openfigi"
-TABLE = "openfigi_mappings"
-
-TRANSACTIONS_LANDING = ROOT / "data" / "landing" / "transactions"
-TRANSACTIONS_TABLE = "transactions"
-
-TIINGO_LANDING = ROOT / "data" / "landing" / "tiingo"
-PRICES_TABLE = "prices"
-
-CUSTODIAN_LANDING = ROOT / "data" / "landing" / "custodian"
-CUSTODIAN_TABLE = "custodian_holdings"
-
-# Simulation answer key for the planted custodian breaks (used only by a dbt test)
-TRUTH_LANDING = ROOT / "data" / "landing" / "truth"
-TRUTH_TABLE = "planted_breaks"
-
-# One entry per data source: (label for logging, landing folder, raw table name)
+# One entry per data source: (label for logging, landing folder, raw table name).
+# "truth" is the simulation answer key for the planted custodian breaks; only a
+# dbt test reads it.
 SOURCES = [
-    ("openfigi", LANDING, TABLE),
-    ("transactions", TRANSACTIONS_LANDING, TRANSACTIONS_TABLE),
-    ("tiingo", TIINGO_LANDING, PRICES_TABLE),
-    ("custodian", CUSTODIAN_LANDING, CUSTODIAN_TABLE),
-    ("truth", TRUTH_LANDING, TRUTH_TABLE),
+    ("openfigi", LANDING_ROOT / "openfigi", "openfigi_mappings"),
+    ("transactions", LANDING_ROOT / "transactions", "transactions"),
+    ("tiingo", LANDING_ROOT / "tiingo", "prices"),
+    ("custodian", LANDING_ROOT / "custodian", "custodian_holdings"),
+    ("truth", LANDING_ROOT / "truth", "planted_breaks"),
 ]
 
 

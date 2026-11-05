@@ -7,21 +7,18 @@ divCash (dividend paid that day, 0.0 if none). These are the actual
 corporate-action signals positions will need to apply later.
 """
 import os
-from datetime import date, datetime, timezone
-from pathlib import Path
-
 import time
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 from load_to_postgres import get_engine
+from pipeline_common import ROOT, write_partition
 
-ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-OUT = ROOT / "data" / "landing" / "tiingo"
 API_KEY = os.environ["TIINGO_API_KEY"]
 
 START_DATE = "2026-04-01"
@@ -29,7 +26,6 @@ END_DATE = "2026-10-01"
 
 
 def load_tickers(engine) -> list[str]:
-    from sqlalchemy import text
     with engine.connect() as conn:
         rows = conn.execute(text("SELECT ticker FROM marts.dim_security_master")).scalars().all()
     return list(rows)
@@ -65,17 +61,12 @@ if __name__ == "__main__":
         raise SystemExit("marts.dim_security_master is empty — build it first.")
 
     frames = []
-    for ticker in tickers:
+    for i, ticker in enumerate(tickers):
         print(f"Fetching {ticker}...")
         frames.append(fetch_prices(ticker))
-        time.sleep(1.5)  # stay under Tiingo's free-tier rate limit
+        if i < len(tickers) - 1:
+            time.sleep(1.5)  # stay under Tiingo's free-tier rate limit
 
     df = pd.concat(frames, ignore_index=True)
-
-    ingest_date = datetime.now(timezone.utc).date()
-    partition_dir = OUT / f"ingest_date={ingest_date}"
-    partition_dir.mkdir(parents=True, exist_ok=True)
-
-    out_path = partition_dir / "part-0001.parquet"
-    df.to_parquet(out_path, index=False)
+    out_path = write_partition(df, "tiingo")
     print(f"Wrote {len(df)} price rows for {len(tickers)} tickers to {out_path}")

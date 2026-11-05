@@ -14,24 +14,20 @@ otherwise the no-oversell check is only valid in generation order, not
 in the trade_date order positions actually reads.
 """
 import random
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import date
 
 import pandas as pd
-from pandas.tseries.holiday import USFederalHolidayCalendar
-from pandas.tseries.offsets import CustomBusinessDay
 from sqlalchemy import text
 
 from load_to_postgres import get_engine
-
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "landing" / "transactions"
+from pipeline_common import US_BDAY, write_partition
 
 N_TRANSACTIONS = 350
 START_DATE = date(2026, 4, 1)
 END_DATE = date(2026, 10, 1)
 
-US_BDAY = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+# Weekdays only. Market holidays are not excluded (see README, known limitations).
+BUSINESS_DAYS = [d.date() for d in pd.bdate_range(START_DATE, END_DATE)]
 
 
 def load_securities(engine) -> list[dict]:
@@ -42,9 +38,8 @@ def load_securities(engine) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def random_business_day(start: date, end: date) -> date:
-    days = pd.bdate_range(start, end)
-    return days[random.randint(0, len(days) - 1)].date()
+def random_business_day() -> date:
+    return BUSINESS_DAYS[random.randint(0, len(BUSINESS_DAYS) - 1)]
 
 
 def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:
@@ -56,13 +51,13 @@ def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:
     # This guarantees generation order == chronological order, so the
     # no-oversell check is enforced in the same order positions will read.
     planned = [
-        dict(security_id=s["security_id"], trade_date=random_business_day(START_DATE, END_DATE), seed=True)
+        dict(security_id=s["security_id"], trade_date=random_business_day(), seed=True)
         for s in securities
     ]
     planned += [
         dict(
             security_id=random.choice(securities)["security_id"],
-            trade_date=random_business_day(START_DATE, END_DATE),
+            trade_date=random_business_day(),
             seed=False,
         )
         for _ in range(n - len(securities))
@@ -94,7 +89,8 @@ def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:
             price=price,
         ))
 
-    return pd.DataFrame(rows).sort_values("trade_date").reset_index(drop=True)
+    # `dated` is already in trade_date order, so the rows are too.
+    return pd.DataFrame(rows)
 
 
 if __name__ == "__main__":
@@ -104,11 +100,5 @@ if __name__ == "__main__":
         raise SystemExit("marts.dim_security_master is empty — build it first.")
 
     df = generate_transactions(securities, N_TRANSACTIONS)
-
-    ingest_date = datetime.now(timezone.utc).date()
-    partition_dir = OUT / f"ingest_date={ingest_date}"
-    partition_dir.mkdir(parents=True, exist_ok=True)
-
-    out_path = partition_dir / "part-0001.parquet"
-    df.to_parquet(out_path, index=False)
+    out_path = write_partition(df, "transactions")
     print(f"Wrote {len(df)} transactions to {out_path}")
