@@ -40,6 +40,7 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 |---|---|---|---|
 | `dim_security_master` | FIGI | Dimension, **Type 1** (overwrite, no history) | unique `security_id` |
 | `fct_positions` | transaction | Transaction fact, with a running position (semi-additive) | unique `transaction_id` |
+| `fct_holdings_daily` | security + trading day, from the security's first trade (zero-quantity days kept) | **Periodic snapshot**, valued at the day's close; analyst-facing layer over `int_book_daily_holdings` | unique combination |
 | `fct_recon_positions` | security + trading day, only where either side holds a position | **Periodic snapshot** (sparse: zero-holding days are absent) | unique combination |
 | `fct_break_episodes` | unbroken run of break days for a security | Accumulating-snapshot style (start, end, open flag, age) | unique `security_id` + `episode_start` |
 | `fct_break_action_history` | break episode + trading day it was open | Periodic snapshot of an episode | unique combination |
@@ -64,10 +65,10 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 
 1. **No grain tests** on `int_book_daily_holdings`, `int_prices_split_indexed`, `fct_open_breaks_summary`. Cheap to add, high signal.
 2. **`dim_security_master` is Type 1.** If a ticker changes, the old ticker is overwritten and history is lost. A Type 2 dimension keeps one row per version with `valid_from` and `valid_to`. Needed for correct point-in-time joins (mastery list #7).
-3. **The daily holdings snapshot lives in `intermediate`.** It is the most useful table for an analyst ("what did we hold on day D?") and should be a mart with a proper key to the dimension.
+3. ~~The daily holdings snapshot lives only in `intermediate`.~~ Done: `fct_holdings_daily` is a thin mart on top of `int_book_daily_holdings`. The intermediate model stays (the recon and its unit tests depend on it).
 4. **No date dimension.** Every fact stores a raw date. A `dim_date` with a trading-day flag, week, month and quarter makes calendar logic one join instead of ad hoc SQL.
 5. **One portfolio only.** Real books have funds and accounts. A `dim_account` (or `dim_fund`) would turn the grain into account + security + day. Worth mentioning in the README as a known simplification.
-6. **Positions are not valued.** `fct_recon_positions` has quantities only. Market value per position per day (quantity times close) would make the snapshot usable for NAV-style questions.
+6. **`fct_recon_positions` has quantities only.** Valuation now lives in `fct_holdings_daily`; the recon could join it to size each break in money.
 
 ## Open questions for the author
 

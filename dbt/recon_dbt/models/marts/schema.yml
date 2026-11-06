@@ -19,6 +19,40 @@ models:
               min_value: 0
               inclusive: true
 
+  - name: fct_holdings_daily
+    description: >
+      One row per security per trading day (periodic snapshot of our book),
+      valued at that day's close. Quantity is semi-additive: sum across
+      securities on one day, never across days.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [as_of_date, security_id]
+    columns:
+      - name: security_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_security_master')
+              field: security_id
+      - name: as_of_date
+        tests:
+          - not_null
+      - name: quantity_trade_basis
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+      - name: close_price
+        tests:
+          - not_null
+      - name: market_value
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+
   - name: fct_recon_positions
     tests:
       - dbt_utils.unique_combination_of_columns:
