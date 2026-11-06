@@ -7,6 +7,7 @@ divCash (dividend paid that day, 0.0 if none). These are the actual
 corporate-action signals positions will need to apply later.
 """
 import os
+import sys
 import time
 
 import pandas as pd
@@ -15,7 +16,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 
 from load_to_postgres import get_engine
-from pipeline_common import ROOT, write_partition
+from pipeline_common import ROOT, partition_file, write_partition
 
 load_dotenv(ROOT / ".env")
 
@@ -55,6 +56,15 @@ def fetch_prices(ticker: str) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
+    # Tiingo's free tier allows 50 requests/hour and every run fetches one request per
+    # ticker, so re-running the DAG would burn the quota for data we already have.
+    # The date range is fixed, so today's file is complete (writes are atomic).
+    # Pass --force to refetch anyway.
+    existing = partition_file("tiingo")
+    if existing.exists() and "--force" not in sys.argv:
+        print(f"Prices already fetched today ({existing}); skipping. Use --force to refetch.")
+        raise SystemExit(0)
+
     engine = get_engine()
     tickers = load_tickers(engine)
     if not tickers:

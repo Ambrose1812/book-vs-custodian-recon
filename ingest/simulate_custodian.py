@@ -31,7 +31,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from load_to_postgres import get_engine
-from pipeline_common import LANDING_ROOT, US_BDAY, write_partition
+from pipeline_common import LANDING_ROOT, MARKET_BDAY, write_partition
 
 TX_LANDING = LANDING_ROOT / "transactions"
 
@@ -104,9 +104,16 @@ def daily_holdings(trades: pd.DataFrame, factor_of, dates: pd.DatetimeIndex) -> 
     return out.sort_values(["as_of_date", "security_id"]).reset_index(drop=True)
 
 
-def plant_errors(trades: pd.DataFrame, split_events: pd.DataFrame, rng: random.Random):
-    """Return (custodian_trades, skipped_splits, truth_rows). One cause per security."""
-    secs = sorted(trades["security_id"].unique())
+def plant_errors(trades: pd.DataFrame, split_events: pd.DataFrame, rng: random.Random,
+                 last_day: pd.Timestamp):
+    """Return (custodian_trades, skipped_splits, truth_rows). One cause per security.
+
+    A planted error only counts if the recon can see it, so a bad trade must settle
+    on or before last_day (the last day the recon runs). A trade on the final trade
+    date settles after the window closes and would never show up as a break.
+    """
+    visible = trades[trades["settlement_date"] <= last_day]
+    secs = sorted(visible["security_id"].unique())
     rng.shuffle(secs)
 
     # Securities whose split actually matters: shares settled before the ex-date.
@@ -123,7 +130,7 @@ def plant_errors(trades: pd.DataFrame, split_events: pd.DataFrame, rng: random.R
     pool = [s for s in secs if s not in used]
 
     def pick_trade(sec):
-        g = trades[trades["security_id"] == sec]
+        g = visible[visible["security_id"] == sec]
         return g.iloc[rng.randrange(len(g))]
 
     truth = [dict(break_type="split_not_applied", security_id=s["security_id"], ticker=s["ticker"],
@@ -185,9 +192,10 @@ if __name__ == "__main__":
         ["security_id", "ticker", "ex_date", "split_factor"]]
 
     rng = random.Random(SEED)
-    cust_trades, skipped, truth = plant_errors(trades, split_events, rng)
+    last_day = prices["price_date"].max()
+    cust_trades, skipped, truth = plant_errors(trades, split_events, rng, last_day)
     factor_of = make_factor_lookup(prices, skipped)
-    dates = pd.date_range(trades["trade_date"].min(), prices["price_date"].max(), freq=US_BDAY)
+    dates = pd.date_range(trades["trade_date"].min(), last_day, freq=MARKET_BDAY)
     holdings = daily_holdings(cust_trades, factor_of, dates)
 
     ingest_date = datetime.now(timezone.utc).date()  # one date for both files

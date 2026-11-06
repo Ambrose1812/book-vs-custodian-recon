@@ -20,14 +20,14 @@ import pandas as pd
 from sqlalchemy import text
 
 from load_to_postgres import get_engine
-from pipeline_common import US_BDAY, write_partition
+from pipeline_common import MARKET_BDAY, write_partition
 
 N_TRANSACTIONS = 350
 START_DATE = date(2026, 4, 1)
 END_DATE = date(2026, 10, 1)
 
-# Weekdays only. Market holidays are not excluded (see README, known limitations).
-BUSINESS_DAYS = [d.date() for d in pd.bdate_range(START_DATE, END_DATE)]
+# Days the exchange is open: weekdays minus NYSE holidays.
+BUSINESS_DAYS = [d.date() for d in pd.date_range(START_DATE, END_DATE, freq=MARKET_BDAY)]
 
 
 def load_securities(engine) -> list[dict]:
@@ -68,7 +68,7 @@ def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:
     for i, p in enumerate(dated):
         sec_id = p["security_id"]
         trade_date = p["trade_date"]
-        settlement_date = trade_date + US_BDAY * 1
+        settlement_date = trade_date + MARKET_BDAY * 1
         price = round(random.uniform(50, 450), 2)
 
         if p["seed"] or holdings[sec_id] == 0:

@@ -9,14 +9,27 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pandas.tseries.holiday import USFederalHolidayCalendar
+import pandas as pd
 from pandas.tseries.offsets import CustomBusinessDay
 
 ROOT = Path(__file__).resolve().parent.parent
 LANDING_ROOT = ROOT / "data" / "landing"
 
-# US federal holidays, not the NYSE calendar (see README, known limitations).
-US_BDAY = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+# NYSE full-day closures for 2026 (hardcoded; extend this list if the date range
+# moves to another year). Federal holidays are not enough: Good Friday is an NYSE
+# closure but not a federal holiday.
+NYSE_HOLIDAYS = pd.to_datetime([
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25",
+    "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+])
+# One business day on the exchange calendar: used for trade dates and T+1 settlement.
+MARKET_BDAY = CustomBusinessDay(holidays=NYSE_HOLIDAYS)
+
+
+def partition_file(source: str, ingest_date=None) -> Path:
+    """Path of a source's part file for one ingest date (default: today, UTC)."""
+    ingest_date = ingest_date or datetime.now(timezone.utc).date()
+    return LANDING_ROOT / source / f"ingest_date={ingest_date}" / "part-0001.parquet"
 
 
 def write_partition(data, source: str, ingest_date=None) -> Path:
@@ -27,11 +40,9 @@ def write_partition(data, source: str, ingest_date=None) -> Path:
     up. data is a pandas DataFrame or a pyarrow Table. ingest_date defaults to
     today (UTC).
     """
-    ingest_date = ingest_date or datetime.now(timezone.utc).date()
-    out_dir = LANDING_ROOT / source / f"ingest_date={ingest_date}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    final = out_dir / "part-0001.parquet"
-    tmp = out_dir / "part-0001.parquet.tmp"
+    final = partition_file(source, ingest_date)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    tmp = final.with_name(final.name + ".tmp")
     if isinstance(data, pa.Table):
         pq.write_table(data, tmp)
     else:
