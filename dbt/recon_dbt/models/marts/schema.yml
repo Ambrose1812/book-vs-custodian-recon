@@ -92,6 +92,12 @@ models:
               max_value: 1
               inclusive: true
 
+  - name: fct_open_breaks_summary
+    description: Open breaks right now, one row per break type and age bucket.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [break_type, age_bucket]
+
   - name: fct_break_cause_baseline
     tests:
       - dbt_utils.unique_combination_of_columns:

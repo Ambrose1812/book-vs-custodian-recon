@@ -29,8 +29,8 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 
 | Model | Grain | Type | Grain test |
 |---|---|---|---|
-| `int_prices_split_indexed` | ticker + price_date | Calculation (running split index) | **missing** |
-| `int_book_daily_holdings` | security + trading day, from the security's first trade | **Periodic snapshot** (two measures: trade-basis and settled-basis quantity) | **missing** |
+| `int_prices_split_indexed` | ticker + price_date | Calculation (running split index) | unique combination |
+| `int_book_daily_holdings` | security + trading day, from the security's first trade | **Periodic snapshot** (two measures: trade-basis and settled-basis quantity) | unique combination |
 
 `int_book_daily_holdings` is a periodic snapshot in everything but name and location. Promoting it to a mart is the next step.
 
@@ -47,7 +47,7 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 | `fct_break_cause_baseline` | break episode (rules-based cause at its first break day) | Fact (derived) | unique `security_id` + `first_break_date` |
 | `fct_break_requires_action` | open break episode | Latest-day slice of the history table | unique combination |
 | `fct_recon_daily_kpis` | trading day | Aggregate, one row per day | check `as_of_date` unique |
-| `fct_open_breaks_summary` | break type + age bucket (right now) | Aggregate, current state only | **missing** |
+| `fct_open_breaks_summary` | break type + age bucket (right now) | Aggregate, current state only | unique combination |
 
 ## Eval
 
@@ -63,7 +63,7 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 
 ## Gaps to close (in priority order)
 
-1. **No grain tests** on `int_book_daily_holdings`, `int_prices_split_indexed`, `fct_open_breaks_summary`. Cheap to add, high signal.
+1. ~~No grain tests on `int_book_daily_holdings`, `int_prices_split_indexed`, `fct_open_breaks_summary`.~~ Added.
 2. **`dim_security_master` is Type 1.** If a ticker changes, the old ticker is overwritten and history is lost. A Type 2 dimension keeps one row per version with `valid_from` and `valid_to`. Needed for correct point-in-time joins (mastery list #7).
 3. ~~The daily holdings snapshot lives only in `intermediate`.~~ Done: `fct_holdings_daily` is a thin mart on top of `int_book_daily_holdings`. The intermediate model stays (the recon and its unit tests depend on it).
 4. **No date dimension.** Every fact stores a raw date. A `dim_date` with a trading-day flag, week, month and quarter makes calendar logic one join instead of ad hoc SQL.

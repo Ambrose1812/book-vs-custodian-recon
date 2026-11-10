@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: int_prices_split_indexed
+    description: One row per ticker per trading day, with the cumulative split index.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [ticker, price_date]
+    columns:
+      - name: cum_split_factor
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+
+  - name: int_book_daily_holdings
+    description: >
+      One row per security per trading day from the security's first trade,
+      with quantity on the trade basis and the settled basis.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [as_of_date, security_id]
+    columns:
+      - name: quantity_trade_basis
+        tests:
+          - not_null
+      - name: quantity_settled_basis
+        tests:
+          - not_null
