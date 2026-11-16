@@ -14,7 +14,7 @@
 -- Everything except matched and timing_difference is a break (is_break).
 --
 -- Tolerance (shares): differences up to this are rounding noise, not breaks.
-{% set tol = var('recon_tolerance', 0.001) %}
+{% set tol = var('recon_tolerance') %}
 
 with trading_days as (
     select distinct price_date as as_of_date

@@ -6,15 +6,18 @@ plants (one cause per security). I only add a label if the generator plants it,
 because without an answer key there is nothing to score it against.
 """
 
+# Each cause with its one-line description. The LLM prompt prints these lines
+# word for word, so changing one changes the prompt (bump PROMPT_VERSION).
 # The first four are scored against raw.planted_breaks. "unknown" is the
 # answer for "I can't tell", and it always goes to a human.
-CAUSES = (
-    "missing_trade",      # custodian never recorded one trade: gap is -1x that trade's quantity
-    "duplicate_trade",    # custodian recorded one trade twice: gap is +1x
-    "wrong_quantity",     # custodian recorded one trade at 10x: gap is +9x
-    "split_not_applied",  # custodian skipped a split: constant ratio from the ex-date
-    "unknown",
-)
+CAUSE_DESCRIPTIONS = {
+    "missing_trade": "the custodian never recorded one of our trades (gap is -1x that trade's quantity)",
+    "duplicate_trade": "the custodian recorded one trade twice (gap is +1x)",
+    "wrong_quantity": "the custodian recorded one trade at 10x the size (gap is +9x)",
+    "split_not_applied": "the custodian skipped a stock split (constant ratio from the ex-date)",
+    "unknown": "the facts do not point to one cause",
+}
+CAUSES = tuple(CAUSE_DESCRIPTIONS)
 
 # The labels that can appear in the answer key. Nothing plants "unknown".
 SCORED_CAUSES = CAUSES[:-1]

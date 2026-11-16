@@ -23,6 +23,8 @@ import json
 import random
 from pathlib import Path
 
+from classify.taxonomy import TRADE_MULTIPLE
+
 OUT_DIR = Path(__file__).parent
 SEED = 7
 TOL = 0.001
@@ -53,7 +55,7 @@ def baseline(packet):
     gap = packet["gap_vs_settled"]
     matches = []
     for t in packet["candidate_trades"]:
-        for cause, mult in (("missing_trade", -1.0), ("duplicate_trade", 1.0), ("wrong_quantity", 9.0)):
+        for cause, mult in TRADE_MULTIPLE.items():
             if abs(gap - mult * t["effect_on_day"]) <= TOL:
                 matches.append((cause, t["transaction_id"]))
     if len(matches) == 1:
@@ -280,7 +282,7 @@ def make_all(rng):
     for i, (style, shift) in enumerate(styles, 1):
         def mk(style=style, shift=shift, i=i):
             q = rng.choice([50, 75, 100, 120, 150, 200, 250, 300])
-            mult = {"missing": -1, "duplicate": 1, "wrong": 9}[style]
+            mult = TRADE_MULTIPLE[CAUSE_OF[style]]
             return build(f"NMS-{i:02d}", "near_miss", "invented",
                          f"The gap is within {abs(shift)} shares of a {style} trade but not exact. Close enough "
                          "is wrong here: the right answer is unknown.",

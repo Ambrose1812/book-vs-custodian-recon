@@ -38,7 +38,7 @@ def python_script(task_id: str, script: str, **kwargs) -> BashOperator:
 def dbt_command(task_id: str, args: str, **kwargs) -> BashOperator:
     return BashOperator(
         task_id=task_id,
-        bash_command=f"cd {DBT_DIR} && {DBT} deps && {DBT} {args}",
+        bash_command=f"cd {DBT_DIR} && {DBT} {args}",
         **kwargs,
     )
 
@@ -62,6 +62,10 @@ with DAG(
     default_args={"retries": 1, "retry_delay": timedelta(minutes=2)},
     tags=["recon", "phase2"],
 ) as dag:
+    # Install dbt packages once per run. `dbt deps` used to run in front of every dbt
+    # task and took about 5 seconds each time, longer than most of the dbt work itself.
+    dbt_deps = dbt_command("dbt_deps", "deps")
+
     ingest_openfigi = python_script("ingest_openfigi", "openfigi_ingest.py")
     load_reference = python_script("load_reference_data", "load_to_postgres.py")
     build_security_master = dbt_command(
@@ -90,6 +94,7 @@ with DAG(
     dbt_test = dbt_command("dbt_test", "test")
 
     ingest_openfigi >> load_reference >> build_security_master
+    dbt_deps >> build_security_master
     build_security_master >> [seed_transactions, ingest_tiingo] >> load_all
     load_all >> dbt_build_prices >> simulate_custodian >> load_custodian
     load_custodian >> dbt_run >> dbt_test

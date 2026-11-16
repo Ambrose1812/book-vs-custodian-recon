@@ -13,7 +13,7 @@
 --      the split factor equals our book, the custodian skipped the split.
 --   5. Anything else is unknown. If more than one trade fits I also say unknown,
 --      because picking one would be a coin flip.
-{% set tol = var('recon_tolerance', 0.001) %}
+{% set tol = var('recon_tolerance') %}
 
 with trading_days as (
     select
@@ -113,38 +113,53 @@ match_summary as (
         min(trade_multiple)     as trade_multiple
     from matches
     group by security_id, first_break_date
+),
+
+resolved as (
+    select
+        fb.security_id,
+        fb.first_break_date,
+        fb.recon_status,
+        fb.custodian_quantity,
+        fb.book_quantity_settled_basis,
+        fb.gap_vs_settled,
+        coalesce(ms.n_trade_matches, 0)                       as n_trade_matches,
+        ms.transaction_id                                     as candidate_transaction_id,
+        ms.trade_multiple,
+        ms.cause                                              as trade_cause,
+        -- Rule 4: a split takes effect that day and undoing it explains the gap.
+        df.split_on_day <> 1
+            and abs(fb.custodian_quantity * df.split_on_day - fb.book_quantity_settled_basis)
+                <= {{ tol }} * greatest(df.split_on_day, 1)   as split_explains_gap
+    from first_break fb
+    join day_factor df
+        on df.security_id = fb.security_id
+       and df.first_break_date = fb.first_break_date
+    left join match_summary ms
+        on ms.security_id = fb.security_id
+       and ms.first_break_date = fb.first_break_date
 )
 
 select
-    fb.security_id,
-    fb.first_break_date,
-    fb.recon_status,
-    fb.custodian_quantity,
-    fb.book_quantity_settled_basis,
-    fb.gap_vs_settled,
-    coalesce(ms.n_trade_matches, 0)                       as n_trade_matches,
-    ms.transaction_id                                     as candidate_transaction_id,
-    ms.trade_multiple,
+    security_id,
+    first_break_date,
+    recon_status,
+    custodian_quantity,
+    book_quantity_settled_basis,
+    gap_vs_settled,
+    n_trade_matches,
+    candidate_transaction_id,
+    trade_multiple,
     case
-        when ms.n_trade_matches = 1 then ms.cause
-        when ms.n_trade_matches > 1 then 'unknown'
-        when df.split_on_day <> 1
-         and abs(fb.custodian_quantity * df.split_on_day - fb.book_quantity_settled_basis)
-             <= {{ tol }} * greatest(df.split_on_day, 1) then 'split_not_applied'
+        when n_trade_matches = 1 then trade_cause
+        when n_trade_matches > 1 then 'unknown'
+        when split_explains_gap  then 'split_not_applied'
         else 'unknown'
     end                                                   as cause_predicted,
     case
-        when ms.n_trade_matches = 1 then 'trade_ratio'
-        when ms.n_trade_matches > 1 then 'ambiguous'
-        when df.split_on_day <> 1
-         and abs(fb.custodian_quantity * df.split_on_day - fb.book_quantity_settled_basis)
-             <= {{ tol }} * greatest(df.split_on_day, 1) then 'split_ratio'
+        when n_trade_matches = 1 then 'trade_ratio'
+        when n_trade_matches > 1 then 'ambiguous'
+        when split_explains_gap  then 'split_ratio'
         else 'no_signature'
     end                                                   as cause_method
-from first_break fb
-join day_factor df
-    on df.security_id = fb.security_id
-   and df.first_break_date = fb.first_break_date
-left join match_summary ms
-    on ms.security_id = fb.security_id
-   and ms.first_break_date = fb.first_break_date
+from resolved

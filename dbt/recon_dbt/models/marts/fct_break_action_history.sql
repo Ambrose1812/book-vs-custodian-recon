@@ -15,7 +15,7 @@
 --
 -- Thresholds come from vars in dbt_project.yml. They mirror
 -- classify/action_policy.py, so change both together.
-{% set tol = var('recon_tolerance', 0.001) %}
+{% set tol = var('recon_tolerance') %}
 
 with trading_days as (
     select

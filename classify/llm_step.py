@@ -20,19 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from classify import action_policy
-from classify.taxonomy import CAUSES
+from classify.taxonomy import CAUSE_DESCRIPTIONS, CAUSES
 
 # Bump this whenever the prompt text changes, so old decisions can be traced
 # back to the exact prompt that produced them.
 PROMPT_VERSION = "v1"
-
-CAUSE_HELP = {
-    "missing_trade": "the custodian never recorded one of our trades (gap is -1x that trade's quantity)",
-    "duplicate_trade": "the custodian recorded one trade twice (gap is +1x)",
-    "wrong_quantity": "the custodian recorded one trade at 10x the size (gap is +9x)",
-    "split_not_applied": "the custodian skipped a stock split (constant ratio from the ex-date)",
-    "unknown": "the facts do not point to one cause",
-}
 
 
 @dataclass
@@ -97,7 +89,7 @@ class JsonlAuditLog:
 
 
 def build_prompt(case: BreakCase) -> str:
-    causes = "\n".join(f"- {c}: {CAUSE_HELP[c]}" for c in CAUSES)
+    causes = "\n".join(f"- {c}: {d}" for c, d in CAUSE_DESCRIPTIONS.items())
     return (
         "You help an operations team work out why their position records disagree "
         "with the custodian's.\n\n"

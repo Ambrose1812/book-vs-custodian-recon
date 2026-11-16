@@ -1,8 +1,8 @@
 """Simulate buy/sell transactions for securities in dim_security_master.
 
 Settlement date follows the real US equities rule: trade date + 1 business
-day (T+1, in effect since May 2024), using the US federal holiday calendar
-so weekends and market holidays are correctly skipped.
+day (T+1, in effect since May 2024), on the NYSE calendar in pipeline_common,
+so weekends and market holidays are skipped.
 
 A running position is tracked per security while generating, so a SELL
 can never exceed shares actually held at that point — never happens in
@@ -39,7 +39,7 @@ def load_securities(engine) -> list[dict]:
 
 
 def random_business_day() -> date:
-    return BUSINESS_DAYS[random.randint(0, len(BUSINESS_DAYS) - 1)]
+    return random.choice(BUSINESS_DAYS)
 
 
 def generate_transactions(securities: list[dict], n: int) -> pd.DataFrame:

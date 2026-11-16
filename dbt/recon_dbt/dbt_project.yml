@@ -1,16 +1,9 @@
-
-# Name your project! Project names should contain only lowercase characters
-# and underscores. A good package name should reflect your organization's
-# name or the intended use of these models
 name: 'recon_dbt'
 version: '1.0.0'
 
-# This setting configures which "profile" dbt uses for this project.
+# The connection profile, defined in dbt/profiles/profiles.yml.
 profile: 'recon_dbt'
 
-# These configurations specify where dbt should look for different types of files.
-# The `model-paths` config, for example, states that models in this project can be
-# found in the "models/" directory. You probably won't need to change these!
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
@@ -22,20 +15,16 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
-
-# Configuring models
-# Full documentation: https://docs.getdbt.com/docs/configuring-models
-
-# In this example config, we tell dbt to build all models in the example/
-# directory as views. These settings can be overridden in the individual model
-# files using the `{{ config(...) }}` macro.
+# One Postgres schema per layer. Staging models are views (light cleanup over raw).
+# Intermediate models are tables: several marts and tests read them, and as views
+# their split math was recomputed for every one of those reads.
 models:
   recon_dbt:
     staging:
       +schema: staging
     intermediate:
       +schema: intermediate
-      +materialized: view
+      +materialized: table
     marts:
       +schema: marts
       +materialized: table
@@ -43,8 +32,11 @@ models:
       +schema: eval
       +materialized: table
 
-# Requires-action thresholds. These mirror classify/action_policy.py, keep them in sync.
 vars:
+  # Share differences up to this size are rounding noise, not breaks.
+  recon_tolerance: 0.001
+
+  # Requires-action thresholds. These mirror classify/action_policy.py, keep them in sync.
   gap_bps_review: 0.5
   gap_bps_escalate: 5.0
   nav_materiality_bps: 50.0
