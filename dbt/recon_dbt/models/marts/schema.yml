@@ -10,6 +10,10 @@ models:
 
   - name: fct_positions
     columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
       - name: security_id
         tests:
           - not_null
