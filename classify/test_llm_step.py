@@ -10,8 +10,8 @@ CASE = BreakCase(
     security_id="S1", first_break_date="2026-06-01",
     custodian_quantity=100, book_quantity_settled_basis=0, gap_vs_settled=100,
     baseline_method="ambiguous",
-    candidate_trades=[{"transaction_id": 1, "side": "BUY", "quantity": 100},
-                      {"transaction_id": 2, "side": "SELL", "quantity": 100}],
+    candidate_trades=[{"transaction_id": 1, "side": "BUY", "quantity": 100, "effect_on_day": 100},
+                      {"transaction_id": 2, "side": "SELL", "quantity": 100, "effect_on_day": -100}],
 )
 
 
@@ -95,6 +95,12 @@ class LlmStepTests(unittest.TestCase):
         for cause in ("missing_trade", "duplicate_trade", "wrong_quantity", "split_not_applied", "unknown"):
             self.assertIn(cause, prompt)
         self.assertIn('"gap_vs_settled": 100', prompt)
+
+    def test_prompt_states_causes_against_the_signed_effect(self):
+        # v1 said "-1x that trade's quantity", which is wrong for a SELL.
+        prompt = build_prompt(CASE)
+        self.assertIn("effect_on_day", prompt.split("Facts about this break")[0])
+        self.assertNotIn("trade's quantity", prompt)
 
 
 if __name__ == "__main__":

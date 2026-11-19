@@ -11,10 +11,11 @@ because without an answer key there is nothing to score it against.
 # The first four are scored against raw.planted_breaks. "unknown" is the
 # answer for "I can't tell", and it always goes to a human.
 CAUSE_DESCRIPTIONS = {
-    "missing_trade": "the custodian never recorded one of our trades (gap is -1x that trade's quantity)",
-    "duplicate_trade": "the custodian recorded one trade twice (gap is +1x)",
-    "wrong_quantity": "the custodian recorded one trade at 10x the size (gap is +9x)",
-    "split_not_applied": "the custodian skipped a stock split (constant ratio from the ex-date)",
+    "missing_trade": "the custodian never recorded one of our trades (gap = -1 x that trade's effect_on_day)",
+    "duplicate_trade": "the custodian recorded one trade twice (gap = +1 x that trade's effect_on_day)",
+    "wrong_quantity": "the custodian recorded one trade at 10x the size (gap = +9 x that trade's effect_on_day)",
+    "split_not_applied": "the custodian skipped a stock split "
+                         "(custodian_quantity x split_factor_on_day = book_quantity_settled_basis)",
     "unknown": "the facts do not point to one cause",
 }
 CAUSES = tuple(CAUSE_DESCRIPTIONS)

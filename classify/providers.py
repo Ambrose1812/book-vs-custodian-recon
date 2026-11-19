@@ -20,8 +20,10 @@ MODEL = "claude-haiku-5-5"  # the small, cheap model. Plenty for a short classif
 class AnthropicProvider:
     name = "anthropic"
 
-    def __init__(self, model: str = MODEL, max_tokens: int = 1500, timeout: float = 30.0, client=None):
+    def __init__(self, model: str = MODEL, max_tokens: int = 4000, timeout: float = 30.0, client=None):
         self.model = model
+        # The model's thinking counts against this cap. In the v1 experiment two calls
+        # used over 1,470 of a 1,500 cap; a cut-off reply would have become "unknown".
         self.max_tokens = max_tokens
         if client is None:
             if not os.environ.get("ANTHROPIC_API_KEY"):

@@ -27,6 +27,11 @@ from classify.taxonomy import TRADE_MULTIPLE
 
 OUT_DIR = Path(__file__).parent
 SEED = 7
+# A second, separate set built the same way with a different seed. It is generated
+# once, after the prompt is frozen, and scored once: nobody looks at it or tunes
+# against it. That is what makes its score evidence rather than a fitted number.
+HOLDOUT_SEED = 2027
+HOLDOUT_PREFIX = "HO-"
 TOL = 0.001
 
 # How many times the custodian recorded a trade, compared with once when it is correct.
@@ -292,9 +297,11 @@ def make_all(rng):
     return bases
 
 
-def generate():
-    rng = random.Random(SEED)
+def generate(seed=SEED, prefix=""):
+    rng = random.Random(seed)
     bases = make_all(rng)
+    for b in bases:
+        b["id"] = prefix + b["id"]
     records = [r for b in bases for r in packets(b, rng)]
     return bases, records
 
@@ -318,9 +325,16 @@ def review_markdown(bases, records):
 
 
 if __name__ == "__main__":
-    bases, records = generate()
-    (OUT_DIR / "cases.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n")
-    (OUT_DIR / "CASES_FOR_REVIEW.md").write_text(review_markdown(bases, records))
+    import sys
+    if "--holdout" in sys.argv:
+        # No review file on purpose: reading the held-out cases before scoring them
+        # would start the same tuning loop the set exists to prevent.
+        bases, records = generate(HOLDOUT_SEED, HOLDOUT_PREFIX)
+        (OUT_DIR / "holdout.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    else:
+        bases, records = generate()
+        (OUT_DIR / "cases.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n")
+        (OUT_DIR / "CASES_FOR_REVIEW.md").write_text(review_markdown(bases, records))
     counts = {}
     for r in records:
         counts[r["group"]] = counts.get(r["group"], 0) + 1

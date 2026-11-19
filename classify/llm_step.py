@@ -24,7 +24,11 @@ from classify.taxonomy import CAUSE_DESCRIPTIONS, CAUSES
 
 # Bump this whenever the prompt text changes, so old decisions can be traced
 # back to the exact prompt that produced them.
-PROMPT_VERSION = "v1"
+#   v1  first version.
+#   v2  after the v1 experiment (classify/evalset/RESULTS_v1.md): causes are stated
+#       against the signed effect_on_day instead of "quantity" (v1 misled the model
+#       on every SELL), and the fields the model misread are explained.
+PROMPT_VERSION = "v2"
 
 
 @dataclass
@@ -36,7 +40,8 @@ class BreakCase:
     book_quantity_settled_basis: float
     gap_vs_settled: float
     baseline_method: str  # why the rules gave up: 'ambiguous' or 'no_signature'
-    candidate_trades: list = field(default_factory=list)  # trades settling that day
+    # Trades settling that day. Each needs effect_on_day (signed, in that day's share terms).
+    candidate_trades: list = field(default_factory=list)
     split_factor_on_day: float = 1.0
 
 
@@ -94,6 +99,15 @@ def build_prompt(case: BreakCase) -> str:
         "You help an operations team work out why their position records disagree "
         "with the custodian's.\n\n"
         f"Allowed causes:\n{causes}\n\n"
+        "How to read the facts:\n"
+        "- gap_vs_settled = custodian_quantity - book_quantity_settled_basis.\n"
+        "- effect_on_day is a trade's signed effect on our position, in that day's share "
+        "terms: positive for a BUY, negative for a SELL. Use it, not quantity, to test a cause. "
+        "A missing SELL therefore leaves a positive gap.\n"
+        "- baseline_method only says how far the automatic rules got on the numbers alone: "
+        "'ambiguous' means more than one trade fits the gap, 'no_signature' means no single trade "
+        "or split fits, 'not_run' means the rules were not applied. It is not evidence for or "
+        "against a cause. A status on a trade or an ops note can settle what the numbers cannot.\n\n"
         f"Facts about this break:\n{json.dumps(asdict(case), indent=2)}\n\n"
         "Rules:\n"
         "- Use only the facts above. Do not invent trades or numbers.\n"

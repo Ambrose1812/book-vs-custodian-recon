@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from classify.evalset.generate_cases import baseline, generate
+from classify.evalset.generate_cases import HOLDOUT_PREFIX, HOLDOUT_SEED, baseline, generate
 
 FILE = Path(__file__).parent / "cases.jsonl"
 
@@ -62,6 +62,34 @@ class CaseTests(unittest.TestCase):
         self.assertEqual(baseline(packet(-50, 50, 100, [t(3, 50), t(4, 50)])), ("unknown", "ambiguous"))         # S2
         self.assertEqual(baseline(packet(-100, 0, 100, [t(5, 100)])), ("missing_trade", "trade_ratio"))          # S3
         self.assertEqual(baseline(packet(-200, 100, 300, [t(11, 100)], 2)), ("unknown", "no_signature"))         # S4
+
+
+
+class HoldoutTests(unittest.TestCase):
+    """The held-out set must be built like the development set but share no case with it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dev = [json.loads(line) for line in FILE.read_text().splitlines()]
+        cls.bases, cls.records = generate(HOLDOUT_SEED, HOLDOUT_PREFIX)
+
+    def test_file_matches_a_fresh_run(self):
+        saved = [json.loads(line) for line in (FILE.parent / "holdout.jsonl").read_text().splitlines()]
+        self.assertEqual(saved, json.loads(json.dumps(self.records)))
+
+    def test_same_shape_as_the_development_set(self):
+        count = lambda rs: sorted((r["group"], r["variant"]) for r in rs)
+        self.assertEqual(count(self.records), count(self.dev))
+
+    def test_no_packet_repeats_a_development_packet(self):
+        key = lambda r: json.dumps({k: v for k, v in r["packet"].items()
+                                    if k not in ("security_id", "first_break_date")}, sort_keys=True)
+        self.assertFalse({key(r) for r in self.records} & {key(r) for r in self.dev})
+
+    def test_rules_behave_the_same_way(self):
+        for r in self.records:
+            want = r["truth"]["causes"][0] if r["group"] == "clean" else "unknown"
+            self.assertEqual(r["baseline"]["label"], want, r["case_id"])
 
 
 if __name__ == "__main__":
