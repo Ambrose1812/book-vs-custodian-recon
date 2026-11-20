@@ -53,7 +53,7 @@ Newest first.
 
 ## A person signs off on anything the AI labels
 - **Question:** who gets the final say when an AI labels a break?
-- **Chose:** a person. Anything an LLM labels is at least Level 2 (review), the LLM never closes a break, and every call gets logged: input, output, model version, prompt version. (The LLM step is not built yet.)
+- **Chose:** a person. Anything an LLM labels is at least Level 2 (review), the LLM never closes a break, and every call gets logged: input, output, model version, prompt version. The step is built in `classify/llm_step.py`, and the experiment below is how it was tested.
 - **Rejected:** letting the model's label stand on its own. It can be confidently wrong, and on big breaks, corporate actions or old breaks a wrong label hides the problem instead of flagging it. A person is also the one who can be held accountable.
 - **Costs:** more review time, and the AI saves less effort than it would if I trusted it.
 
@@ -69,5 +69,14 @@ Newest first.
 - **Rejected:** loosening the thresholds until the levels look balanced. That fits the policy to made-up data.
 - **Costs:** this data cannot show a break climbing from Level 1 to 3 as it ages. The unit test with hand-made cases is what shows the levels working. A later simulation could include small breaks that get resolved.
 
-## Known risks not yet handled
-- If a later custodian feed omits a row an earlier ingest contained, staging keeps the old row, because the latest ingest wins per record. Not a problem with a fixed seed and unchanged inputs; worth a test.
+## The custodian feed is a snapshot, so staging takes the latest file whole
+- **Question:** when the custodian sends its statement again, which rows does staging keep?
+- **Chose:** only the latest ingest, as one complete snapshot. A custodian statement leaves out positions that are zero, so a missing row means zero shares.
+- **Rejected:** keeping the latest row per date and security, which is what I had at first. When I regenerated the trades on Nov 5, 139 rows from the older file had no newer row to replace them, so they would have stayed as phantom holdings and shown up as fake breaks.
+- **Costs:** every custodian file has to be complete. A half-delivered file would wipe out good rows, so a real feed would need a check (for example, the row count against the day before) before it replaces anything.
+
+## Testing the AI step against the rules, then on cases I never tuned against
+- **Question:** does the LLM add anything over the rules, and how do I know a good score is real?
+- **Chose:** an experiment on 62 invented cases with known answers (`classify/evalset/`), scoring the rules alone, the model alone, and the pipeline (rules first, model only where the rules say unknown). Each answer counts as correct, abstained (said unknown when a cause could be named, so a person looks) or wrong (named a cause the facts do not support). Prompt v1 scored 54 of 62. Reading the audit log showed two problems with my prompt, not the model: it said a missing trade leaves a gap of "-1x that trade's quantity", which has the wrong sign for every SELL, and it never explained `baseline_method`, so the model treated "ambiguous" as a reason to doubt evidence that settled the case. Prompt v2 states every cause against the signed `effect_on_day` and explains what `baseline_method` means. It fixed all 8 misses and changed no other answer. Because I wrote v2 after reading v1's failures, I then built a held-out set of 62 new cases with a different seed, did not read it, and scored it once. v2 got 62 of 62 there too, said unknown on all 7 cases where two different causes fit, and was never confidently wrong.
+- **Rejected:** trusting v2's 62 of 62 on the cases I tuned against, which is like grading a strategy on the data it was fitted to. Also rejected: using the model's confidence to decide what needs review. In v1 its two wrong answers were as confident (0.6 and 0.7) as its right ones.
+- **Costs:** every case is invented, and the held-out set comes from the same recipes with new numbers, so this shows the fix generalises to new numbers and combinations, not to new kinds of breaks or messy real custodian wording. It is one run of one small model. The model also answers differently on runs that look alike, so every label it gives still goes to a person at Level 2 or above, and the audit log keeps the exact prompt and reply for every decision.
