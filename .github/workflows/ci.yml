@@ -1,0 +1,72 @@
+# Runs on every push and pull request. What it checks, and what it cannot:
+#   - the Python tests (classify/): the AI step, the experiment runner and the test
+#     set. They use a mock model, so no API key is needed.
+#   - dbt parse: every model, test and YAML file is valid and every ref resolves.
+#   - the dbt unit tests, against a throwaway Postgres. They feed hand-made rows into
+#     single models, so they need the tables to exist but not any real data.
+# It cannot run the full pipeline: data/ is gitignored and the ingest needs API keys.
+# The full run with real data is the local DAG run and the clean-clone gate.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16            # same version as docker-compose.yml
+        env:
+          POSTGRES_USER: recon
+          POSTGRES_PASSWORD: ci_only_pw  # a throwaway database that lives for this job only
+          POSTGRES_DB: recon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: recon
+      POSTGRES_PASSWORD: ci_only_pw
+      POSTGRES_DB: recon
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/profiles
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"      # the Python inside the Airflow image
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Python tests
+        run: python -m unittest discover -s classify -t . -v
+
+      - name: dbt deps and parse
+        working-directory: dbt/recon_dbt
+        run: |
+          dbt deps
+          dbt parse
+
+      - name: Create empty raw tables
+        env:
+          PGPASSWORD: ci_only_pw
+        run: psql -h localhost -U recon -d recon -v ON_ERROR_STOP=1 -f ci/raw_schema.sql
+
+      - name: dbt unit tests
+        working-directory: dbt/recon_dbt
+        run: |
+          dbt run --empty               # builds every model with zero rows, so the unit tests can read their columns
+          dbt test --select test_type:unit

@@ -1,5 +1,7 @@
 # Book vs. Custodian Reconciliation Pipeline
 
+[![CI](https://github.com/Ambrose1812/book-vs-custodian-recon/actions/workflows/ci.yml/badge.svg)](https://github.com/Ambrose1812/book-vs-custodian-recon/actions/workflows/ci.yml)
+
 Does our book of record match the custodian, and where are the breaks?
 
 A batch pipeline that rebuilds a portfolio's daily positions from trades and reconciles them against a custodian holdings feed. Built with Python, Postgres, dbt, Airflow, and Docker. Identifiers (OpenFIGI) and prices and splits (Tiingo) are real; the transactions and the custodian feed are simulated, and the recon is scored against known planted errors. The reasoning behind each design choice, including what I rejected and what it costs, is in [docs/decisions.md](docs/decisions.md).
@@ -40,7 +42,7 @@ OpenFIGI + Tiingo + simulated transactions
 
 | Layer | Models | Purpose |
 | --- | --- | --- |
-| staging | `stg_openfigi_mappings`, `stg_prices`, `stg_transactions`, `stg_custodian_holdings` | Dedupe to the latest ingest per record |
+| staging | `stg_openfigi_mappings`, `stg_openfigi_mapping_history`, `stg_prices`, `stg_transactions`, `stg_custodian_holdings` | Latest ingest per record, except the custodian feed (a snapshot, so the latest file as a whole) and the OpenFIGI history (every snapshot kept, for the Type 2 dimension) |
 | intermediate | `int_prices_split_indexed`, `int_book_daily_holdings` | Cumulative split factor per ticker and date; our book's daily holdings on trade-date and settled bases |
 | marts | `dim_security_master`, `fct_positions`, `fct_recon_positions`, `fct_break_episodes`, `fct_recon_daily_kpis`, `fct_open_breaks_summary` | Security dimension; split-adjusted position and market value per trade; book vs custodian per security per trading day, classified; one row per unbroken run of break days with its age; daily match rate and break counts; open breaks by type and age bucket |
 
@@ -54,7 +56,8 @@ Short versions here; the full entries (question, choice, rejected alternative, c
 - **The custodian feed is independent of our book.** It is built from raw transactions and prices, not from `fct_positions`, so any disagreement has a real cause. It reports settled holdings and omits zero positions, like a real statement.
 - **Scored against an answer key.** The simulator plants known errors (missing, 10x, and duplicated trades, plus a skipped stock split) and keeps control securities clean. A dbt test fails if the recon misses a planted break, flags a control, or first flags a break on the wrong day. The answer key is a simulation fixture and never feeds the recon models.
 - **Breaks are grouped into episodes.** One problem shows up as many flagged days, so a run of consecutive trading days in break is one episode with a start, an age and an open or closed flag. A clean day ends an episode; a return starts a new one with its age reset.
-- **Tests.** 26 dbt data tests (one is warn-level) plus 4 unit tests (mocked inputs, expected outputs for the split math, the recon classification and the episode logic). A snapshot-and-`EXCEPT` check confirmed the rewritten `fct_positions` matched the previous output.
+- **Tests.** 70 dbt data tests (two are warn-level) and 7 dbt unit tests (mocked inputs, expected outputs for the split math, the recon classification, break episodes, cause rules, action levels, positions and the Type 2 security history), plus 37 Python tests for the AI step and its test set.
+- **CI.** GitHub Actions runs on every push: the Python tests, `dbt parse`, and the dbt unit tests against a throwaway Postgres with empty raw tables (`ci/raw_schema.sql`). It cannot run the full pipeline, because the data is not in the repo and the ingest needs API keys; the full run with real data is the local DAG run and the clean-clone gate.
 
 ## Run it
 1. Copy `.env.example` to `.env` and fill in `TIINGO_API_KEY`, the Postgres settings, and optionally `OPENFIGI_API_KEY` (the OpenFIGI ingest also works without a key, at a lower rate limit).
