@@ -19,6 +19,7 @@ Kimball terms used here:
 | Model | Grain (one row per...) | Grain test |
 |---|---|---|
 | `stg_openfigi_mappings` | FIGI (latest ingest) | unique on `figi` |
+| `stg_openfigi_mapping_history` | FIGI + ingest_date (every snapshot kept) | unique combination |
 | `stg_transactions` | transaction_id (latest ingest) | unique on `transaction_id` |
 | `stg_prices` | ticker + price_date (latest ingest) | unique combination |
 | `stg_custodian_holdings` | as_of_date + security_id, from the latest **full snapshot** only | unique combination |
@@ -38,7 +39,8 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 
 | Model | Grain | Kimball type | Grain test |
 |---|---|---|---|
-| `dim_security_master` | FIGI | Dimension, **Type 1** (overwrite, no history) | unique `security_id` |
+| `dim_security_master` | FIGI | Dimension, **Type 1** (current view only) | unique `security_id` |
+| `dim_security_history` | FIGI + version (`valid_from` inclusive, `valid_to` exclusive) | Dimension, **Type 2** (one row per version); facts join to the version valid on their date | unique `security_key`; unique `security_id` + `valid_from`; custom test that versions tile time with no gap or overlap |
 | `fct_positions` | transaction | Transaction fact, with a running position (semi-additive) | unique `transaction_id` |
 | `fct_holdings_daily` | security + trading day, from the security's first trade (zero-quantity days kept) | **Periodic snapshot**, valued at the day's close; analyst-facing layer over `int_book_daily_holdings` | unique combination |
 | `fct_recon_positions` | security + trading day, only where either side holds a position | **Periodic snapshot** (sparse: zero-holding days are absent) | unique combination |
@@ -64,7 +66,7 @@ Rule that differs by feed type: the custodian feed is a snapshot, so staging tak
 ## Gaps to close (in priority order)
 
 1. ~~No grain tests on `int_book_daily_holdings`, `int_prices_split_indexed`, `fct_open_breaks_summary`.~~ Added.
-2. **`dim_security_master` is Type 1.** If a ticker changes, the old ticker is overwritten and history is lost. A Type 2 dimension keeps one row per version with `valid_from` and `valid_to`. Needed for correct point-in-time joins (mastery list #7).
+2. ~~`dim_security_master` is Type 1.~~ Done: `dim_security_history` is the Type 2 version, built from the raw OpenFIGI history. `fct_holdings_daily.security_key` joins each holding to the version valid on its date. `dim_security_master` stays as the current view, and a test checks the two agree. Not yet done: the other facts still join on the current master.
 3. ~~The daily holdings snapshot lives only in `intermediate`.~~ Done: `fct_holdings_daily` is a thin mart on top of `int_book_daily_holdings`. The intermediate model stays (the recon and its unit tests depend on it).
 4. **No date dimension.** Every fact stores a raw date. A `dim_date` with a trading-day flag, week, month and quarter makes calendar logic one join instead of ad hoc SQL.
 5. **One portfolio only.** Real books have funds and accounts. A `dim_account` (or `dim_fund`) would turn the grain into account + security + day. Worth mentioning in the README as a known simplification.

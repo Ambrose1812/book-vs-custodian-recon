@@ -1,0 +1,26 @@
+unit_tests:
+  - name: test_dim_security_history_versions
+    description: >
+      FB is renamed META (two versions). X changes to Y and back to X (three
+      versions, because a change back is still a change). Z never changes (one
+      version). Repeated identical snapshots must not create versions.
+    model: dim_security_history
+    given:
+      - input: ref('stg_openfigi_mapping_history')
+        rows:
+          - {security_id: 'F1', ticker: 'FB',   name: 'META PLATFORMS', ingest_date: '2026-10-01'}
+          - {security_id: 'F1', ticker: 'FB',   name: 'META PLATFORMS', ingest_date: '2026-10-05'}
+          - {security_id: 'F1', ticker: 'META', name: 'META PLATFORMS', ingest_date: '2026-10-09'}
+          - {security_id: 'F1', ticker: 'META', name: 'META PLATFORMS', ingest_date: '2026-10-12'}
+          - {security_id: 'F2', ticker: 'X',    name: 'TWO',            ingest_date: '2026-10-01'}
+          - {security_id: 'F2', ticker: 'Y',    name: 'TWO',            ingest_date: '2026-10-05'}
+          - {security_id: 'F2', ticker: 'X',    name: 'TWO',            ingest_date: '2026-10-09'}
+          - {security_id: 'F3', ticker: 'Z',    name: 'THREE',          ingest_date: '2026-10-01'}
+    expect:
+      rows:
+        - {security_id: 'F1', version_number: 1, ticker: 'FB',   first_seen_ingest_date: '2026-10-01', valid_from: '1900-01-01', valid_to: '2026-10-09', is_current: false}
+        - {security_id: 'F1', version_number: 2, ticker: 'META', first_seen_ingest_date: '2026-10-09', valid_from: '2026-10-09', valid_to: '9999-12-31', is_current: true}
+        - {security_id: 'F2', version_number: 1, ticker: 'X',    first_seen_ingest_date: '2026-10-01', valid_from: '1900-01-01', valid_to: '2026-10-05', is_current: false}
+        - {security_id: 'F2', version_number: 2, ticker: 'Y',    first_seen_ingest_date: '2026-10-05', valid_from: '2026-10-05', valid_to: '2026-10-09', is_current: false}
+        - {security_id: 'F2', version_number: 3, ticker: 'X',    first_seen_ingest_date: '2026-10-09', valid_from: '2026-10-09', valid_to: '9999-12-31', is_current: true}
+        - {security_id: 'F3', version_number: 1, ticker: 'Z',    first_seen_ingest_date: '2026-10-01', valid_from: '1900-01-01', valid_to: '9999-12-31', is_current: true}

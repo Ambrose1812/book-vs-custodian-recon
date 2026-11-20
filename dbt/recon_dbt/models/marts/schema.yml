@@ -23,6 +23,32 @@ models:
               min_value: 0
               inclusive: true
 
+  - name: dim_security_history
+    description: >
+      Type 2 security dimension: one row per version of a security, with valid_from
+      (inclusive) and valid_to (exclusive). Join facts on security_id and their date
+      falling inside the window to get the version that was true on that date.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [security_id, valid_from]
+    columns:
+      - name: security_key
+        tests:
+          - unique
+          - not_null
+      - name: security_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_security_master')
+              field: security_id
+      - name: valid_from
+        tests:
+          - not_null
+      - name: valid_to
+        tests:
+          - not_null
+
   - name: fct_holdings_daily
     description: >
       One row per security per trading day (periodic snapshot of our book),
@@ -41,6 +67,13 @@ models:
       - name: as_of_date
         tests:
           - not_null
+      - name: security_key
+        description: The dim_security_history version in effect on as_of_date.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_security_history')
+              field: security_key
       - name: quantity_trade_basis
         tests:
           - not_null

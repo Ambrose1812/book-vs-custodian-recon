@@ -13,9 +13,16 @@
 -- market_value uses the trade-basis quantity (our book of record) and the raw,
 -- unadjusted close on the same day, so shares and price are on the same basis.
 -- quantity_settled_basis is kept for comparison with the custodian.
+--
+-- security_key points at the dim_security_history version that was true on as_of_date
+-- (a point-in-time join), so a holding in June shows the ticker it had in June even if
+-- it was renamed later. ticker and security_name stay the current ones, because Tiingo
+-- prices are keyed by today's ticker; ticker_as_of is the ticker on that day.
 select
     h.as_of_date,
     h.security_id,
+    sv.security_key,
+    sv.ticker                                      as ticker_as_of,
     sm.ticker,
     sm.name                                        as security_name,
     h.quantity_trade_basis,
@@ -29,3 +36,9 @@ join {{ ref('dim_security_master') }} sm
 join {{ ref('int_prices_split_indexed') }} p
     on p.ticker = sm.ticker
    and p.price_date = h.as_of_date
+-- Left join on purpose: a gap in the history would show up as a null key that the
+-- not_null test catches, instead of rows silently dropping out of the snapshot.
+left join {{ ref('dim_security_history') }} sv
+    on sv.security_id = h.security_id
+   and h.as_of_date >= sv.valid_from
+   and h.as_of_date <  sv.valid_to

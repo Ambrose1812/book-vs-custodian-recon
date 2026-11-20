@@ -8,6 +8,16 @@ models:
           - unique
           - not_null
 
+  - name: stg_openfigi_mapping_history
+    description: One row per FIGI per OpenFIGI ingest (every snapshot kept).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [security_id, ingest_date]
+    columns:
+      - name: security_id
+        tests:
+          - not_null
+
   - name: stg_transactions
     columns:
       - name: transaction_id
