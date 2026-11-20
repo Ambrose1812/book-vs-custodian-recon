@@ -16,7 +16,7 @@ investigation. This project simulates that daily process.
 - **Phase 2 (complete):** simulated custodian feed with planted breaks, daily book holdings, a break-detecting recon scored against an answer key, and break aging with daily KPIs.
 
 ## Result
-Latest scoring run: 14 planted errors (13 trade errors and one skipped stock split) across 20 securities, 6 left clean as controls. The recon flags all 14 on the day each one starts and flags none of the controls. This is checked by a dbt test, so a regression fails the build. Breaks are grouped into episodes with an age: all 14 are still open, 12 older than 30 days and 2 between 11 and 30.
+Latest scoring run: 14 planted errors (13 trade errors and one skipped stock split) across 20 securities, 6 left clean as controls. The recon flags all 14 on the day each one starts and flags none of the controls. This is checked by a dbt test, so a regression fails the build. Breaks are grouped into episodes with an age: all 14 are still open and all are quantity breaks, 9 older than 30 trading days and 5 between 11 and 30.
 
 ## Where to look
 | To see | Open |

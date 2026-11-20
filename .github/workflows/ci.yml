@@ -41,9 +41,9 @@ jobs:
       DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/profiles
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"      # the Python inside the Airflow image
           cache: pip
@@ -68,5 +68,9 @@ jobs:
       - name: dbt unit tests
         working-directory: dbt/recon_dbt
         run: |
-          dbt run --empty               # builds every model with zero rows, so the unit tests can read their columns
+          # Build every model. The raw tables are empty, so every model comes out with zero
+          # rows, which is all the unit tests need (they read the columns, then bring their
+          # own rows). Not `dbt run --empty`: it swaps each ref for an aliased subquery, and
+          # models that alias a ref themselves (`from ref(...) t`) end up with two aliases.
+          dbt run
           dbt test --select test_type:unit
